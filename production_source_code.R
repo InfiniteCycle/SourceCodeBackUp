@@ -1,8 +1,6 @@
-<<<<<<< HEAD
 ## Make some changes
 ## Some another changes..
-=======
->>>>>>> refs/remotes/origin/master
+
 ### Loading required packages.
 library(rJava)
 library(RJDBC)
