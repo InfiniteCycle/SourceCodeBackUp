@@ -574,9 +574,11 @@ for (i in 1:20) {
         temp[m+1, 1] <- as.character(format(as.Date(temp$prod_date[j])+32,'%Y-%m-01'))
         
         if(j < max(dcl$n_mth[dcl$first_prod_year == max(dcl$first_prod_year)])) {
-          temp[m+1, 2] <- round(temp$prod[m] * ( 1 + dcl$avg[dcl$first_prod_year == max(dcl$first_prod_year) & dcl$n_mth == (j+1)]/100),0)
+          dcl-factor <- ( 1 + dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == (j + 1), avg]/100)
+          temp[m+1, 2] <- round(temp$prod[m] * dcl_factor,0)
         } else {
-          temp[m+1, 2] <- round(temp$prod[m] * ( 1 + dcl$avg[dcl$first_prod_year == max(dcl$first_prod_year) & dcl$n_mth == max(dcl$n_mth[dcl$first_prod_year == max(dcl$first_prod_year)])]/100),0)
+          dcl_factor <- ( 1 + dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == max(dcl_state_avg[first_prod_year == max(first_prod_year), n_mth]), avg]/100)
+          temp[m+1, 2] <- round(temp$prod[m] * dcl_factor,0)
         }
       }
     }
