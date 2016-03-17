@@ -1,4 +1,3 @@
-## Make some changes
 ### Loading required packages.
 library(rJava)
 library(RJDBC)
@@ -147,7 +146,7 @@ ndakota_zero = ndakota # replicate the filled table as a backup
 #                        where prod_date >= (last_prod_date - interval '6 month')
 #                        group by entity_id")
 # check_avg = as.data.table(check_avg)
-# 
+#
 # hist(check_avg[avg <= 150, avg])
 ##
 
@@ -373,7 +372,7 @@ test = ddply(ndakota[prod_date >= '2015-06-01',], "prod_date", summarise, total_
 
 # sales price
 hist_price <- dbGetQuery(dev_base, "with t0 as (
-                         select (substr(contract,4,2)::INT + 2000) as year, 
+                         select (substr(contract,4,2)::INT + 2000) as year,
                          case when substr(contract,3,1) = 'F' then 1
                          when substr(contract,3,1) = 'G' then 2
                          when substr(contract,3,1) = 'H' then 3
@@ -385,25 +384,25 @@ hist_price <- dbGetQuery(dev_base, "with t0 as (
                          when substr(contract,3,1) = 'U' then 9
                          when substr(contract,3,1) = 'V' then 10
                          when substr(contract,3,1) = 'X' then 11
-                         when substr(contract,3,1) = 'Z' then 12 end as month, avg(month1) as avg	     	  
-                         from nymex_nearby 
+                         when substr(contract,3,1) = 'Z' then 12 end as month, avg(month1) as avg
+                         from nymex_nearby
                          where tradedate >= current_date - interval '4 months' and product_symbol = 'CL'
                          group by year, month
                          order by 1, 2),
-                         
+
                          t1 as (
                          select extract('year' from sale_date) as year, extract('month' from sale_date) as month, avg(price) as avg
                          from di.pden_sale
                          where prod_type = 'OIL' and sale_date >= '2013-10-01'
                          group by 1, 2
                          order by 1, 2)
-                         
+
                          select * from t1
                          union
                          select * from t0
                          order by 1, 2                ")
 
-f_price <- dbGetQuery(base, "select (substr(contract,4,2)::INT + 2000) as year, 
+f_price <- dbGetQuery(base, "select (substr(contract,4,2)::INT + 2000) as year,
                       case when substr(contract,3,1) = 'F' then 1
                       when substr(contract,3,1) = 'G' then 2
                       when substr(contract,3,1) = 'H' then 3
@@ -415,8 +414,8 @@ f_price <- dbGetQuery(base, "select (substr(contract,4,2)::INT + 2000) as year,
                       when substr(contract,3,1) = 'U' then 9
                       when substr(contract,3,1) = 'V' then 10
                       when substr(contract,3,1) = 'X' then 11
-                      when substr(contract,3,1) = 'Z' then 12 end as month, *	     	  
-                      from nymex_nearby 
+                      when substr(contract,3,1) = 'Z' then 12 end as month, *
+                      from nymex_nearby
                       where tradedate = (select max(tradedate) from nymex_nearby where product_symbol = 'CL') and product_symbol = 'CL'")
 
 future_price <- as.data.frame(matrix(nrow = 11, ncol = 3));
@@ -425,7 +424,7 @@ colnames(future_price)<-c('year', 'month', 'avg');
 
 ##transform future price table
 for (i in 1:11){
-  
+
   if(f_price$month + i <= 12){
     future_price$year[i] <- f_price$year
     future_price$month[i] <- f_price$month + i
@@ -444,7 +443,7 @@ Moving_Avg <- function(data, interval){
   n = length(data)
   m = interval
   SMA = data.frame('SMA' = rep(0, (n - m + 1)))
-  
+
   for(i in n:1){
     if((i - m + 1) <= 0){
       break
@@ -455,18 +454,18 @@ Moving_Avg <- function(data, interval){
     }
   }
   SMA = SMA[c((n - m + 1):1),]
-  
+
   return(as.data.frame(SMA))
 }
 
 
 
 # prod of new wells
-new_prod <- dbGetQuery(dev_base, "select first_prod_date, extract('year' from first_prod_date) first_prod_year, 
-                       extract('month' from first_prod_date) first_prod_month, 
+new_prod <- dbGetQuery(dev_base, "select first_prod_date, extract('year' from first_prod_date) first_prod_year,
+                       extract('month' from first_prod_date) first_prod_month,
                        round(sum(liq)/1000/(extract(days from (first_prod_date + interval '1 month' - first_prod_date))),0) as new_prod
                        from di.pden_desc a join di.pden_prod b on a.entity_id = b.entity_id
-                       where liq_cum >0 and prod_date >= '2013-12-01' and ALLOC_PLUS IN ('Y','X') and liq >= 0 and state = 'ND' 
+                       where liq_cum >0 and prod_date >= '2013-12-01' and ALLOC_PLUS IN ('Y','X') and liq >= 0 and state = 'ND'
                        and first_prod_date < date_trunc('month', current_date)::DATE - interval '5 month' and first_prod_date = prod_date
                        group by 1,2,3
                        order by 1,2,3")
@@ -477,7 +476,7 @@ new_prod$first_prod_date <- as.Date(new_prod$first_prod_date)
 
 hist_prod <- dbGetQuery(base, "select prod_date, round(sum(liq)/1000/(extract(days from (prod_date + interval '1 month' - prod_date))),0) as prod
                         from di.pden_desc a join di.pden_prod b on a.entity_id = b.entity_id
-                        where liq_cum >0 and prod_date >= '2013-12-01' and ALLOC_PLUS IN ('Y','X') and liq >= 0 
+                        where liq_cum >0 and prod_date >= '2013-12-01' and ALLOC_PLUS IN ('Y','X') and liq >= 0
                         and state = 'ND' and prod_date < date_trunc('month', current_date)::DATE - interval '5 month'
                         group by prod_date
                         order by 1")
@@ -493,7 +492,7 @@ updated_prod <- prod[prod$prod_date > max(hist_prod$prod_date),-2]
 
 first_prod <- dbGetQuery(base, "select prod_date, round(sum(liq)/1000/(extract(days from (prod_date + interval '1 month' - prod_date))),0) as prod
                          from di.pden_desc a join di.pden_prod b on a.entity_id = b.entity_id
-                         where liq_cum >0 and prod_date >= '2013-12-01' and ALLOC_PLUS IN ('Y','X') and liq >= 0 
+                         where liq_cum >0 and prod_date >= '2013-12-01' and ALLOC_PLUS IN ('Y','X') and liq >= 0
                          and state = 'ND' and prod_date >= date_trunc('month', current_date)::DATE - interval '5 month' and prod_date = first_prod_date
                          group by prod_date
                          order by 1")
@@ -514,7 +513,7 @@ state_total = plyr::ddply(prod_subset, .(prod_date), summarise, total = sum(tota
 weight = sqldf("select a.*, round(total_prod/total,6) weight from prod_subset a, state_total b
                where a.prod_date = b.prod_date")
 # Using the last five months' weights to calculate the average weight.
-avg_weight = plyr::ddply(weight, .(basin), summarise, avg_weight = mean(weight)) %>>% 
+avg_weight = plyr::ddply(weight, .(basin), summarise, avg_weight = mean(weight)) %>>%
   as.data.table()
 
 dcl_weight_avg = dcl
@@ -537,33 +536,33 @@ for (i in 1:20) {
   if(as.Date(format(as.Date(max(hist_prod$prod_date))+32,'%Y-%m-01')) <= as.Date(max(prod$prod_date)))
   {
     n = nrow(hist_prod)
-    
+
     fit <- as.data.frame(cbind(new_prod$new_prod[2:n], new_prod$new_prod[1:(n-1)], hist_prod$prod[1:(n-1)], Moving_Avg(price$avg, 3)[1:(n-1),]))
-    
+
     colnames(fit) <- c("new_prod","new_prod_lag", "prod", "avg")
-    
+
     lm <- lm(new_prod ~ -1 + new_prod_lag + prod + avg, data = fit)
-    
+
     #summary(lm)
-    
+
     data <- as.data.frame(cbind(new_prod$new_prod[n], hist_prod$prod[n],Moving_Avg(price$avg, 3)[n,]))
-    
+
     colnames(data) <- c("new_prod_lag", "prod", "avg")
-    
+
     #prod of new wells
-    new_prod[n+1,1] <- as.character(format(as.Date(new_prod$first_prod_date[n]+32),'%Y-%m-01')) 
-    new_prod[n+1,2] <- new_prod$first_prod_year[n] 
+    new_prod[n+1,1] <- as.character(format(as.Date(new_prod$first_prod_date[n]+32),'%Y-%m-01'))
+    new_prod[n+1,2] <- new_prod$first_prod_year[n]
     new_prod[n+1,3] <- new_prod$first_prod_month[n] + 1
     new_prod[n+1,4] <- round(predict(lm, data),0)
-    
+
     # new first month production
     new_first_prod[i,1] <- as.character(format(as.Date(hist_prod$prod_date[n]+32),'%Y-%m-01'))
     new_first_prod[i,2] <- round(predict(lm, data),0)
-    
-    
+
+
     # update the updated production
     temp <- new_first_prod[i,]
-    
+
     for (j in 1:20) {
       if(as.Date(format(as.Date(temp$prod_date)+32*j,'%Y-%m-01')) > as.Date(max(prod$prod_date)))
       {
@@ -573,7 +572,7 @@ for (i in 1:20) {
       {
         m = nrow(temp)
         temp[m+1, 1] <- as.character(format(as.Date(temp$prod_date[j])+32,'%Y-%m-01'))
-        
+
         if(j < max(dcl$n_mth[dcl$first_prod_year == max(dcl$first_prod_year)])) {
           dcl-factor <- ( 1 + dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == (j + 1), avg]/100)
           temp[m+1, 2] <- round(temp$prod[m] * dcl_factor,0)
@@ -583,15 +582,15 @@ for (i in 1:20) {
         }
       }
     }
-    
+
     temp$prod_date <- as.Date(temp$prod_date)
-    
+
     updated_prod <- sqldf("select a.prod_date, a.prod + coalesce(b.prod, 0) as prod
                           from updated_prod a left join temp b on a.prod_date = b.prod_date")
-    
-    
+
+
     ## new total production
-    hist_prod[n+1,1] <- as.character(format(as.Date(hist_prod$prod_date[n]+32),'%Y-%m-01')) 
+    hist_prod[n+1,1] <- as.character(format(as.Date(hist_prod$prod_date[n]+32),'%Y-%m-01'))
     hist_prod[n+1,2] <- round(updated_prod$prod[updated_prod$prod_date == hist_prod$prod_date[(n+1)]]
                               - if (length(first_prod$prod[first_prod$prod_date == hist_prod[n+1,1]]) == 0) {
                                 0
