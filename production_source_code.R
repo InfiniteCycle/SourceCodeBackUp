@@ -59,8 +59,8 @@ setkey(basin_max_mth_tbl, basin, first_prod_year)
 
 ## Define a function to match the decline rate.
     ## 'dcl' table must be loaded.
-find_dcl = function(basin, first_prod_year, month){
-  dcl_rate = dcl[(first_prod_year == first & basin == temp_basin) & n_mth == month, avg]/100
+find_dcl = function(basin_, first_, month_){
+  dcl_rate = dcl[(first_prod_year == first_ & basin == basin_) & n_mth == month_, avg]/100
   return(dcl_rate)
 }
 
@@ -306,7 +306,13 @@ forward_liq_func <- function(j){
     else {
         first <- temp[, first_prod_year]
     }
-    dcl_mth <- (max_n_mth + 1)
+    
+    if (max_n_mth >= basin_max_mth) {
+      dcl_mth <- basin_max_mth + 1 
+    } else {
+      dcl_mth <- max_n_mth + 1
+    }
+    
     temp_dt = data.table("liq"= round(temp[,liq] * (1 + find_dcl(temp_basin, first, dcl_mth)), 0))
   return(temp_dt$liq)
 }
@@ -344,8 +350,8 @@ for (i in 1:15) {
   ndakota_last = ndakota[last_prod_date == prod_date, ]
   forward_dt = ndakota_last[entity_id %in% forward[, entity_id], ]
   
-  len = nrow(forward_dt)
-  cat(sprintf("There are %i entities to projected...\n\n", len))
+  # len = nrow(forward_dt)
+  # cat(sprintf("There are %i entities to projected...\n\n", len))
   
   # Making forward projection parallelly.
   # Cluster need to be set before.
@@ -520,8 +526,7 @@ colnames(new_first_prod)<-c('prod_date', 'prod');
 
 #-------------------------------------------#
 ### Calculate the state average decline rate.
-monthly_prod = plyr::ddply(colorado, .(prod_date,basin), summarise, total_prod = sum(liq)/30) %>>%
-  as.data.table()
+monthly_prod = prod %>>% as.data.table()
 # Using the last five months production to calulate their weights.
 prod_subset = monthly_prod[prod_date <= '2015-11-01' & prod_date >= '2015-06-01', ]
 # Calculate the state total production

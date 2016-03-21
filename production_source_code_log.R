@@ -7,6 +7,7 @@ library(kimisc)
 library(foreach)
 library(doParallel)
 library(data.table)
+library(pipeR)
 
 # Set the driver of the PostgreSQL, the driver file (postgresql-9.4.1207.jar) must be downloaded first.
 pgsql <- JDBC("org.postgresql.Driver", "C:/Users/Xiao Wang/Desktop/Programs/postgresql-9.4.1207.jar", "`")
@@ -16,10 +17,11 @@ base<-dbConnect(pgsql, "jdbc:postgresql://ec2-54-204-4-247.compute-1.amazonaws.c
                 user="u9dhckqe2ga9v1",
                 password="pa49dck9aopgfrahuuggva497mh")
 
-# dev_base <- dbConnect(pgsql, "jdbc:postgresql://ec2-107-22-245-176.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory",
-#                       user="u1e126kp11a30t",
-#                       password="p99mbmnfeqdh729mn86vt1v085")
+dev_base <- dbConnect(pgsql, "jdbc:postgresql://ec2-107-22-245-176.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory",
+                      user="u1e126kp11a30t",
+                      password="p99mbmnfeqdh729mn86vt1v085")
 #################################################################################################
+setwd("C:/Users/Xiao Wang/Desktop/Programs/Projects/Prod_Revised")
 
 ### Loading drilling info data set here.
 ndakota <- dbGetQuery(base, "select * from dev.zsz_nd_dec")
@@ -61,12 +63,13 @@ setkey(basin_max_mth_tbl, basin, first_prod_year)
 
 ## Define a function to match the decline rate.
 ## 'dcl' table must be loaded.
-find_dcl_factor = function(basin, first_prod_year, month){
+find_dcl_factor = function(basin_, first_, month_){
   # Find the log decline rate first.
-  dcl_rate = dcl[(first_prod_year == first & basin == temp_basin) & n_mth == month, avg]/100
-  # the decline rate factor is calculated as exp(dcl)
-  # The next period production is: P(t) = P(t - 1)*exp(dcl)
-  dcl_factor = exp(dcl_rate)
+  dcl_rate = dcl[(first_prod_year == first_ & basin == basin_) & n_mth == month_, avg]/100
+  # the decline rate is calculated as r(t) = log(1 + P(t)) - log(1 + P(t - 1))
+  # the decline rate factor is calculated as 10^dcl)
+  # The next period production is: P(t) = (1 + P(t - 1))*10^(dcl) -1
+  dcl_factor = 10^(dcl_rate)
   return(dcl_factor)
 }
 
@@ -105,32 +108,32 @@ for (i in 1:nrow(zero)) {
         ndakota[entity_id == temp_entity_id, comment:= "All Zeros"]
       } else {
         
-        temp_liq_lag_2 = temp[n_mth == (max_n_mth - 3), liq] * find_dcl_factor(temp_basin, first, dcl_mth - 2)
+        temp_liq_lag_2 = (1 + temp[n_mth == (max_n_mth - 3), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 2) - 1
         ndakota[(n_mth == (max_n_mth - 2) & entity_id == temp_entity_id), liq:= temp_liq_lag_2]
         ndakota[(n_mth == (max_n_mth - 2) & entity_id == temp_entity_id), comment:= "Updated"]
         
-        temp_liq_lag_1 = temp[n_mth == (max_n_mth - 2), liq] * find_dcl_factor(temp_basin, first, dcl_mth - 1)
+        temp_liq_lag_1 = (1 + temp[n_mth == (max_n_mth - 2), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1
         ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq:= temp_liq_lag_1]
         ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id),comment:="Updated"]
         
-        temp_liq_lag_0 = ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq]  * find_dcl_factor(temp_basin, first, dcl_mth)
+        temp_liq_lag_0 = (1 + ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq])  * find_dcl_factor(temp_basin, first, dcl_mth) - 1
         ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), liq:= temp_liq_lag_0]
         ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), comment:="Updated"]
       }
     } else {
       
-      temp_liq_lag_1 = temp[n_mth == (max_n_mth - 2), liq] * find_dcl_factor(temp_basin, first, dcl_mth - 1)
+      temp_liq_lag_1 = (1 + temp[n_mth == (max_n_mth - 2), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1
       ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq:= temp_liq_lag_1]
       ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), comment:="Updated"]
       
-      temp_liq_lag_0 = ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq]  *  find_dcl_factor(temp_basin, first, dcl_mth)
+      temp_liq_lag_0 = (1 + ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1
       ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), liq:= temp_liq_lag_0]
       ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), comment:="Updated"]
     }
     
   } else {
     
-    temp_liq_lag_0 = temp[(n_mth == (max_n_mth - 1)), liq] * find_dcl_factor(temp_basin, first, dcl_mth)
+    temp_liq_lag_0 = (1 + temp[(n_mth == (max_n_mth - 1)), liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1
     ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), liq:= temp_liq_lag_0]
     ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), comment:="Updated"]
   }
@@ -223,9 +226,9 @@ for (i in 1:nrow(missing)) {
         ndakota[(entity_id == temp_entity_id), last_prod_date:= toChar(temp[, last_prod_date], j)]
         
         if(j == 1) {
-          temp_liq = round(temp[, liq] *find_dcl_factor(temp[, basin], first, dcl_mth), 0)
+          temp_liq = round((1 + temp[, liq]) *find_dcl_factor(temp[, basin], first, dcl_mth) - 1, 0)
         } else {
-          temp_liq = round(ndakota[n,liq] * find_dcl_factor(temp[, basin], first, dcl_mth), 0)
+          temp_liq = round((1 + ndakota[n,liq]) * find_dcl_factor(temp[, basin], first, dcl_mth) - 1, 0)
         }
         
         # Create a temporary data table to store the generated row.
@@ -257,9 +260,9 @@ for (i in 1:nrow(missing)) {
         n = nrow(ndakota)
         ndakota[(entity_id == temp_entity_id), last_prod_date:= toChar(temp[,last_prod_date], j)]
         if(j == 1) {
-          temp_liq = round(temp[,liq] * find_dcl_factor(temp_basin, first, dcl_mth + j), 0)
+          temp_liq = round((1 + temp[,liq]) * find_dcl_factor(temp_basin, first, dcl_mth + j) - 1, 0)
         } else {
-          temp_liq = round(ndakota[n, liq] *  find_dcl_factor(temp_basin, first, dcl_mth + j), 0)
+          temp_liq = round((1 + ndakota[n, liq]) * find_dcl_factor(temp_basin, first, dcl_mth + j) - 1, 0)
         }
         
         temp_dt = data.table(
@@ -299,8 +302,21 @@ forward_liq_func <- function(j){
   else {
     first <- temp[, first_prod_year]
   }
-  dcl_mth <- (max_n_mth + 1)
-  temp_dt = data.table("liq"= round(temp[,liq] * find_dcl_factor(temp_basin, first, dcl_mth), 0))
+  
+  ## max month of production in basin where the entity is  and from the year that entity first start producing
+  basin_max_mth <- basin_max_mth_tbl[basin == temp_basin & first_prod_year == first, max]
+  
+  ## Actual max month of production of the entity
+  max_n_mth <- temp[prod_date == last_prod_date[1], n_mth]
+  
+  if (max_n_mth >= basin_max_mth) {
+    dcl_mth <- basin_max_mth + 1 
+  } else {
+    dcl_mth <- max_n_mth + 1
+  }
+  
+  # dcl_mth <- (max_n_mth + 1)
+  temp_dt = data.table("liq"= round((1 + temp[,liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1, 0))
   return(temp_dt$liq)
 }
 
@@ -362,16 +378,16 @@ for (i in 1:15) {
 }
 
 ## Keep constant for wells whose production is less than 20 but greater than zero.
-constant_prod <- sqldf("with t0 as (
-                       select entity_id, avg(liq) as avg
-                       from ndakota
-                       group by entity_id)
-                       
-                       select *
-                       from ndakota
-                       where entity_id in (select entity_id from t0 where avg < 20 and avg > 0) and prod_date = last_prod_date")
-
-constant_ndakota_forward = sqldf("select * from forward_dt limit 0")
+# constant_prod <- sqldf("with t0 as (
+#                        select entity_id, avg(liq) as avg
+#                        from ndakota
+#                        group by entity_id)
+#                        
+#                        select *
+#                        from ndakota
+#                        where entity_id in (select entity_id from t0 where avg < 20 and avg > 0) and prod_date = last_prod_date")
+# 
+# constant_ndakota_forward = sqldf("select * from forward_dt limit 0")
 
 
 ###
@@ -380,7 +396,7 @@ stopCluster(cl)
 toc_forward <- proc.time()
 time_usage_forward <- toc_forward - tic_forward
 time_usage_forward
-# ndakota_backup = ndakota
+ndakota_backup = ndakota
 
 test = plyr::ddply(ndakota[prod_date >= '2015-06-01',], "prod_date", summarize, total_prod = sum(liq)/1000) 
 test = as.data.table(test)
@@ -527,8 +543,7 @@ colnames(new_first_prod)<-c('prod_date', 'prod');
 
 #-------------------------------------------------------------------------------------------#
 ### Calculate the state average decline rate.
-monthly_prod = plyr::ddply(ndakota, .(prod_date,basin), summarise, total_prod = sum(liq)/30) %>>%
-  as.data.table()
+monthly_prod = prod %>>% as.data.table()
 # Using the last five months production to calulate their weights.
 prod_subset = monthly_prod[prod_date <= '2015-11-01' & prod_date >= '2015-06-01', ]
 # Calculate the state total production
@@ -598,11 +613,11 @@ for (i in 1:20) {
         temp[m+1, 1] <- as.character(format(as.Date(temp$prod_date[j])+32,'%Y-%m-01'))
         
         if(j < max(dcl$n_mth[dcl$first_prod_year == max(dcl$first_prod_year)])) {
-          dcl_factor <- exp(dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == (j + 1), avg]/100)
-          temp[m+1, 2] <- round(temp$prod[m] * dcl_factor,0)
+          dcl_factor <- 10^(dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == (j + 1), avg]/100)
+          temp[m+1, 2] <- round((1 + temp$prod[m]) * dcl_factor - 1,0)
         } else {
-          dcl_factor <- exp(dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == max(dcl_state_avg[first_prod_year == max(first_prod_year), n_mth]), avg]/100)
-          temp[m+1, 2] <- round(temp$prod[m] * dcl_factor,0)
+          dcl_factor <- 10^(dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == max(dcl_state_avg[first_prod_year == max(first_prod_year), n_mth]), avg]/100)
+          temp[m+1, 2] <- round((1 + temp$prod[m]) * dcl_factor - 1,0)
         }
       }
     }
