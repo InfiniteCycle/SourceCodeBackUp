@@ -151,6 +151,18 @@ ndakota_zero = ndakota # replicate the filled table as a backup
 ##
 
 ## Entity with missing data
+nda <- ndakota[prod_date >= '2015-06-01',]
+
+missing <- sqldf("with t0 as (
+                 select entity_id, avg(liq) as avg
+                 from nda
+                 group by entity_id)
+                 
+                 select *
+                 from ndakota
+                 where entity_id in (select entity_id from t0 where avg >= 20) and prod_date = last_prod_date")
+
+
 missing <- sqldf("with t0 as (
                  select entity_id, avg(liq) as avg
                  from ndakota
@@ -160,7 +172,7 @@ missing <- sqldf("with t0 as (
                  from ndakota
                  where entity_id in (select entity_id from t0 where avg >= 20) and prod_date = last_prod_date")
 
-missing <- subset(missing, last_prod_date < '2015-11-01')
+missing <- subset(missing, last_prod_date < '2015-12-01')
 missing <- as.data.table(missing)
 setkey(missing, entity_id, basin, first_prod_year)
 missing[, last_prod_date := as.character(last_prod_date)]
@@ -306,6 +318,7 @@ registerDoParallel(cl) # register the cluster setting to use multicores.
 # stopCluster(cl) # After making forward projection, cluster must be stopped.
 
 ## Main Routine.
+# i = 1
 
 tic_forward = proc.time()
 for (i in 1:15) {
@@ -327,10 +340,13 @@ for (i in 1:15) {
 
   forward = as.data.table(forward)
   # head(forward)
-
+  
   ndakota_last = ndakota[last_prod_date == prod_date, ]
   forward_dt = ndakota_last[entity_id %in% forward[, entity_id], ]
-
+  
+  len = nrow(forward_dt)
+  cat(sprintf("There are %i entities to projected...\n\n", len))
+  
   # Making forward projection parallelly.
   # Cluster need to be set before.
   forward_liq_proj = foreach(j = 1:nrow(forward_dt), .combine = c, .packages = 'data.table') %dopar%
@@ -352,8 +368,8 @@ for (i in 1:15) {
   # Append the forward prediction in original data set.
   ndakota = rbindlist(list(ndakota, temp_ndakota_forward))
   setkey(ndakota, entity_id, basin, first_prod_year)
-  cat(sprintf('Congratulations! Iteration %i runs successfully...\n', i))
-  cat(sprintf('Interation finished at %s...\n', as.character(Sys.time())))
+  cat(sprintf('Congratulations! Iteration %i runs successfully...\n\n', i))
+  cat(sprintf('Interation finished at %s...\n\n', as.character(Sys.time())))
 }
 
 stopCluster(cl)
