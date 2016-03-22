@@ -526,12 +526,13 @@ colnames(new_first_prod)<-c('prod_date', 'prod');
 
 #-------------------------------------------#
 ### Calculate the state average decline rate.
-monthly_prod = prod %>>% as.data.table()
+monthly_prod = plyr::ddply(ndakota, .(prod_date, basin), summarise, basin_prod = sum(liq)/1000) %>>% as.data.table()
 # Using the last five months production to calulate their weights.
-prod_subset = monthly_prod[prod_date <= '2015-11-01' & prod_date >= '2015-06-01', ]
+prod_subset = monthly_prod[(prod_date <= '2015-11-01' & prod_date >= '2015-06-01'), ]
+prod_subset[, basin_prod := basin_prod/as.numeric(as.Date(format(as.Date(prod_date) + 32,'%Y-%m-01')) - as.Date(prod_date), units = c("days"))]
 # Calculate the state total production
-state_total = plyr::ddply(prod_subset, .(prod_date), summarise, total = sum(total_prod))
-weight = sqldf("select a.*, round(total_prod/total,6) weight from prod_subset a, state_total b
+state_total = plyr::ddply(prod_subset, .(prod_date), summarise, state_prod = sum(basin_prod))
+weight = sqldf("select a.*, round(basin_prod/state_prod,6) weight from prod_subset a, state_total b
                where a.prod_date = b.prod_date")
 # Using the last five months' weights to calculate the average weight.
 avg_weight = plyr::ddply(weight, .(basin), summarise, avg_weight = mean(weight)) %>>%
