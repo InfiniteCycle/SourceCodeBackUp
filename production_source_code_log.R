@@ -29,6 +29,9 @@ ndakota <- mutate(ndakota, comment = "")
 ndakota$last_prod_date <- as.Date(ndakota$last_prod_date)
 ndakota$prod_date <- as.Date(ndakota$prod_date)
 
+## choose the max date of available data
+cutoff_date <- as.Date(dbGetQuery(base, "select max(prod_date) as max from dev.zsz_nd_dec")$max)
+
 ## Change data struture into data.table
 ndakota <- as.data.table(ndakota)
 ## Set keys for faster searching.
@@ -169,7 +172,7 @@ missing <- sqldf("with t0 as (
                  from ndakota
                  where entity_id in (select entity_id from t0 where avg >= 20) and prod_date = last_prod_date")
 
-missing <- subset(missing, last_prod_date < '2015-12-01')
+missing <- subset(missing, last_prod_date < cutoff_date)
 missing <- as.data.table(missing)
 setkey(missing, entity_id, basin, first_prod_year)
 missing[, last_prod_date := as.character(last_prod_date)]
@@ -216,11 +219,11 @@ for (i in 1:nrow(missing)) {
     # j = 0
     for(j in 1:5)
     {
-      if(toDate(temp[, prod_date], j) > as.Date('2015-11-01'))
+      if(toDate(temp[, prod_date], j) >= cutoff_date)
       {
         break
       }
-      if(toDate(temp[, prod_date], j) <= as.Date('2015-11-01'))
+      if(toDate(temp[, prod_date], j) < cutoff_date)
       {
         n = nrow(ndakota)
         ndakota[(entity_id == temp_entity_id), last_prod_date:= toChar(temp[, last_prod_date], j)]
@@ -251,11 +254,11 @@ for (i in 1:nrow(missing)) {
     # j = 1
     for(j in 1:5)
     {
-      if(toDate(temp[, prod_date], j) > as.Date('2015-11-01'))
+      if(toDate(temp[, prod_date], j) >= cutoff_date)
       {
         break
       }
-      if(toDate(temp[, prod_date], j) <= as.Date('2015-11-01'))
+      if(toDate(temp[, prod_date], j) < cutoff_date)
       {
         n = nrow(ndakota)
         ndakota[(entity_id == temp_entity_id), last_prod_date:= toChar(temp[,last_prod_date], j)]
@@ -568,7 +571,7 @@ setkey(dcl_state_avg, first_prod_year, n_mth)
 #----------------------------------------------------------------------------------------#
 
 
-
+i = 1; j = 1
 for (i in 1:20) {
   if(as.Date(format(as.Date(max(hist_prod$prod_date))+32,'%Y-%m-01')) > as.Date(max(prod$prod_date)))
   {
@@ -624,8 +627,8 @@ for (i in 1:20) {
       }
     }
     
-    temp$prod_date <- as.Date(temp$prod_date)
-    updated_prod$prod_date <- as.Date(updated_prod$prod_date)
+    # temp$prod_date <- as.Date(temp$prod_date)
+    # updated_prod$prod_date <- as.Date(updated_prod$prod_date)
     
     updated_prod <- sqldf("select a.prod_date, a.prod + coalesce(b.prod, 0) as prod
                            from updated_prod a, temp b
