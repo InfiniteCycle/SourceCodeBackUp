@@ -375,7 +375,7 @@ for (i in 1:15) {
   
   # Update the last_prod_date for all the entities.
   # ndakota[entity_id %in% forward_dt[,entity_id], last_prod_date:=as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
-  ndakota[, last_prod_date:=as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
+  ndakota[, last_prod_date:= as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
   
   ### data table to store all the entities with constant forward production.
   temp_ndakota_const = const_forward_dt
@@ -388,8 +388,7 @@ for (i in 1:15) {
   temp_ndakota_const[, liq:= const_liq]
   
   # Append the forward prediction in original data set.
-  ndakota = rbindlist(list(ndakota, temp_ndakota_forward))
-  ndakota = rbindlist(list(ndakota, temp_ndakota_const))
+  ndakota = rbindlist(list(ndakota, temp_ndakota_forward,temp_ndakota_const))
   setkey(ndakota, entity_id, basin, first_prod_year)
   cat(sprintf('Congratulations! Iteration %i runs successfully...\n', i))
   cat(sprintf('Interation finished at %s...\n', as.character(Sys.time())))
@@ -617,30 +616,32 @@ for (i in 1:20) {
     new_first_prod[i,1] <- as.character(format(as.Date(hist_prod$prod_date[n])+32,'%Y-%m-01'))
     new_first_prod[i,2] <- round(predict(lm, data),0)
     
-    
     # update the updated production
     temp <- new_first_prod[i,]
     
-    for (j in 1:20) {
-      if(as.Date(format(as.Date(temp$prod_date[1])+32*j,'%Y-%m-01')) > as.Date(max(prod$prod_date)))
-      {
-        break
-      }
-      if(as.Date(format(as.Date(temp$prod_date[1])+32*j,'%Y-%m-01'))<= as.Date(max(prod$prod_date)))
-      {
-        m = nrow(temp)
-        temp[m+1, 1] <- as.character(format(as.Date(temp$prod_date[j])+32,'%Y-%m-01'))
-        
-        if(j < max(dcl$n_mth[dcl$first_prod_year == max(dcl$first_prod_year)])) {
-          dcl_factor <- 10^(dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == (j + 1), avg]/100)
-          temp[m+1, 2] <- round((1 + temp$prod[m]) * dcl_factor - 1,0)
-        } else {
-          dcl_factor <- 10^(dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == max(dcl_state_avg[first_prod_year == max(first_prod_year), n_mth]), avg]/100)
-          temp[m+1, 2] <- round((1 + temp$prod[m]) * dcl_factor - 1,0)
+    if(new_first_prod[i,1] <= cutoff_date){
+      temp <- new_first_prod[i, ]
+    } else{
+      for (j in 1:20) {
+        if(as.Date(format(as.Date(temp$prod_date[1])+32*j,'%Y-%m-01')) > as.Date(max(prod$prod_date)))
+        {
+          break
+        }
+        if(as.Date(format(as.Date(temp$prod_date[1])+32*j,'%Y-%m-01'))<= as.Date(max(prod$prod_date)))
+        {
+          m = nrow(temp)
+          temp[m+1, 1] <- as.character(format(as.Date(temp$prod_date[j])+32,'%Y-%m-01'))
+          
+          if(j < max(dcl$n_mth[dcl$first_prod_year == max(dcl$first_prod_year)])) {
+            dcl_factor <- 10^(dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == (j + 1), avg]/100)
+            temp[m+1, 2] <- round((1 + temp$prod[m]) * dcl_factor - 1,0)
+          } else {
+            dcl_factor <- 10^(dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == max(dcl_state_avg[first_prod_year == max(first_prod_year), n_mth]), avg]/100)
+            temp[m+1, 2] <- round((1 + temp$prod[m]) * dcl_factor - 1,0)
+          }
         }
       }
     }
-    
     # temp$prod_date <- as.Date(temp$prod_date)
     # updated_prod$prod_date <- as.Date(updated_prod$prod_date)
     
