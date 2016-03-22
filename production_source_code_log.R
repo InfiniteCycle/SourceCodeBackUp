@@ -373,10 +373,7 @@ for (i in 1:15) {
   temp_ndakota_forward[, comment:= "Inserted"]
   temp_ndakota_forward[, liq:= forward_liq_proj]
   
-  # Update the last_prod_date for all the entities.
-  # ndakota[entity_id %in% forward_dt[,entity_id], last_prod_date:=as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
-  ndakota[, last_prod_date:= as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
-  
+
   ### data table to store all the entities with constant forward production.
   temp_ndakota_const = const_forward_dt
   const_liq = const_forward_dt[, liq] # use the last availale data as the production.
@@ -386,6 +383,10 @@ for (i in 1:15) {
   temp_ndakota_const[, prod_date:= as.character(format(as.Date(prod_date)+32,'%Y-%m-01'))]
   temp_ndakota_const[, comment:= "Inserted"]
   temp_ndakota_const[, liq:= const_liq]
+  
+  # Update the last_prod_date for all the entities.
+  # ndakota[entity_id %in% forward_dt[,entity_id], last_prod_date:=as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
+  ndakota[, last_prod_date:= as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
   
   # Append the forward prediction in original data set.
   ndakota = rbindlist(list(ndakota, temp_ndakota_forward,temp_ndakota_const))
