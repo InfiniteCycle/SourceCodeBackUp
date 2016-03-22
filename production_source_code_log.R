@@ -350,13 +350,27 @@ for (i in 1:15) {
                    where avg >= 20")
   
   forward = as.data.table(forward)
-  # head(forward)
-  
   ndakota_last = ndakota[last_prod_date == prod_date, ]
   forward_dt = ndakota_last[entity_id %in% forward[, entity_id], ]
   
   # entities whose liq would remain constant.
-  const_forward_dt = ndakota_last[!(entity_id %in% forward[, entity_id]), ]
+  forward_const <- sqldf("with t0 as (
+                   select entity_id, max(n_mth) as max
+                   from ndakota
+                   where comment != 'All Zeros'
+                   group by entity_id),
+                   
+                   t1 as (
+                   select a.entity_id, avg(liq) as avg
+                   from ndakota a join t0 b on a.entity_id = b. entity_id
+                   where n_mth >= max - 6 and comment != 'All Zeros'
+                   group by a.entity_id)
+                   
+                   select entity_id
+                   from t1
+                   where avg < 20 and avg > 0")
+  forward_const <- as.data.table(forward_const)
+  const_forward_dt = ndakota_last[entity_id %in% forward_const[, entity_id], ]
   
   # Making forward projection parallelly.
   # Cluster need to be set before.
@@ -527,7 +541,7 @@ new_prod <- dbGetQuery(dev_base, "select first_prod_date, extract('year' from fi
                        group by 1,2,3
                        order by 1,2,3")
 
-new_prod$first_prod_date <- as.Date(new_prod$first_prod_date)
+new_prod$first_prod_date <- as.character(new_prod$first_prod_date)
 
 ## prod
 
@@ -538,14 +552,14 @@ hist_prod <- dbGetQuery(base, "select prod_date, round(sum(liq)/1000/(extract(da
                         group by prod_date
                         order by 1")
 
-hist_prod$prod_date <- as.Date(hist_prod$prod_date)
+# hist_prod$prod_date <- as.Date(hist_prod$prod_date)
 
 ## forward prod from hist wells
 prod <-  plyr::ddply(ndakota, 'prod_date', summarise, sum = sum(liq)/1000)
 
 prod <- mutate(prod, prod = sum/as.numeric(as.Date(format(as.Date(prod_date) + 32,'%Y-%m-01')) - as.Date(prod_date), units = c("days")))
 
-updated_prod <- prod[prod$prod_date > max(hist_prod$prod_date),-2]
+updated_prod <- prod[as.Date(prod$prod_date) > max(as.Date(hist_prod$prod_date)),-2]
 
 first_prod <- dbGetQuery(base, "select prod_date, round(sum(liq)/1000/(extract(days from (prod_date + interval '1 month' - prod_date))),0) as prod
                          from di.pden_desc a join di.pden_prod b on a.entity_id = b.entity_id
@@ -554,9 +568,7 @@ first_prod <- dbGetQuery(base, "select prod_date, round(sum(liq)/1000/(extract(d
                          group by prod_date
                          order by 1")
 
-new_first_prod <- as.data.frame(matrix(nrow = 15, ncol = 2));
-colnames(new_first_prod)<-c('prod_date', 'prod');
-
+new_first_prod <- data.frame('prod_date' = rep(0,15), 'prod' = rep(0,15));
 ## prod from new wells and 15 month forward
 
 #----------------------------------------------------------------------------------------#
@@ -608,18 +620,18 @@ for (i in 1:20) {
     colnames(data) <- c("new_prod_lag", "prod", "avg")
     
     #prod of new wells
-    new_prod[n+1,1] <- as.character(format(as.Date(new_prod$first_prod_date[n]+32),'%Y-%m-01'))
+    new_prod[n+1,1] <- as.character(format(as.Date(new_prod$first_prod_date[n])+32,'%Y-%m-01'))
     new_prod[n+1,2] <- new_prod$first_prod_year[n]
     new_prod[n+1,3] <- new_prod$first_prod_month[n] + 1
     new_prod[n+1,4] <- round(predict(lm, data),0)
     
     # new first month production
     new_first_prod[i,1] <- as.character(format(as.Date(hist_prod$prod_date[n])+32,'%Y-%m-01'))
-    new_first_prod[i,2] <- round(predict(lm, data),0)
+    new_first_prod[i, 2] <- round(predict(lm, data),0)
     
     # update the updated production
     temp <- new_first_prod[i,]
-    
+  
     if(new_first_prod[i,1] <= cutoff_date){
       temp <- new_first_prod[i, ]
     } else{
@@ -643,15 +655,15 @@ for (i in 1:20) {
         }
       }
     }
+    
     # temp$prod_date <- as.Date(temp$prod_date)
     # updated_prod$prod_date <- as.Date(updated_prod$prod_date)
-    
     updated_prod <- sqldf("select a.prod_date, a.prod + coalesce(b.prod, 0) as prod
-                           from updated_prod a, temp b
-                           where a.prod_date = b.prod_date")
+                           from updated_prod a left join temp b
+                           on a.prod_date = b.prod_date")
     
     ## new total production
-    hist_prod[n+1,1] <- as.character(format(as.Date(hist_prod$prod_date[n]+32),'%Y-%m-01')) 
+    hist_prod[n+1,1] <- as.character(format(as.Date(hist_prod$prod_date[n])+32,'%Y-%m-01')) 
     
     temp_val <- if (length(first_prod$prod[first_prod$prod_date == hist_prod[n+1,1]]) == 0) {0
     } else {first_prod$prod[first_prod$prod_date == hist_prod[n+1,1]]}
