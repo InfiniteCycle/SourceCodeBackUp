@@ -1,4 +1,3 @@
-### just make a litter changes...
 ### Loading required packages.
 library(rJava)
 library(RJDBC)
@@ -542,14 +541,15 @@ colnames(new_first_prod)<-c('prod_date', 'prod');
 
 ## prod from new wells and 15 month forward
 
-#-------------------------------------------------------------------------------------------#
+#----------------------------------------------------------------------------------------#
 ### Calculate the state average decline rate.
-monthly_prod = prod %>>% as.data.table()
+monthly_prod = plyr::ddply(ndakota, .(prod_date, basin), summarise, basin_prod = sum(liq)/1000) %>>% as.data.table()
 # Using the last five months production to calulate their weights.
-prod_subset = monthly_prod[prod_date <= '2015-11-01' & prod_date >= '2015-06-01', ]
+prod_subset = monthly_prod[(prod_date <= '2015-11-01' & prod_date >= '2015-06-01'), ]
+prod_subset[, basin_prod := basin_prod/as.numeric(as.Date(format(as.Date(prod_date) + 32,'%Y-%m-01')) - as.Date(prod_date), units = c("days"))]
 # Calculate the state total production
-state_total = plyr::ddply(prod_subset, .(prod_date), summarise, total = sum(total_prod))
-weight = sqldf("select a.*, round(total_prod/total,6) weight from prod_subset a, state_total b
+state_total = plyr::ddply(prod_subset, .(prod_date), summarise, state_prod = sum(basin_prod))
+weight = sqldf("select a.*, round(basin_prod/state_prod,6) weight from prod_subset a, state_total b
                where a.prod_date = b.prod_date")
 # Using the last five months' weights to calculate the average weight.
 avg_weight = plyr::ddply(weight, .(basin), summarise, avg_weight = mean(weight)) %>>%
@@ -565,7 +565,8 @@ for(i in 1:length(basin_name_)){
 dcl_state_avg <- plyr::ddply(dcl_weight_avg, .(first_prod_year, n_mth), summarise, avg = sum(weighted_avg))
 dcl_state_avg <- as.data.table(dcl_state_avg)
 setkey(dcl_state_avg, first_prod_year, n_mth)
-#-------------------------------------------------------------------------------------------#
+#----------------------------------------------------------------------------------------#
+
 
 
 for (i in 1:20) {
@@ -596,7 +597,7 @@ for (i in 1:20) {
     new_prod[n+1,4] <- round(predict(lm, data),0)
     
     # new first month production
-    new_first_prod[i,1] <- as.character(format(as.Date(hist_prod$prod_date[n]+32),'%Y-%m-01'))
+    new_first_prod[i,1] <- as.character(format(as.Date(hist_prod$prod_date[n])+32,'%Y-%m-01'))
     new_first_prod[i,2] <- round(predict(lm, data),0)
     
     
@@ -604,11 +605,11 @@ for (i in 1:20) {
     temp <- new_first_prod[i,]
     
     for (j in 1:20) {
-      if(as.Date(format(as.Date(temp$prod_date)+32*j,'%Y-%m-01')) > as.Date(max(prod$prod_date)))
+      if(as.Date(format(as.Date(temp$prod_date[1])+32*j,'%Y-%m-01')) > as.Date(max(prod$prod_date)))
       {
         break
       }
-      if(as.Date(format(as.Date(temp$prod_date)+32*j,'%Y-%m-01'))<= as.Date(max(prod$prod_date)))
+      if(as.Date(format(as.Date(temp$prod_date[1])+32*j,'%Y-%m-01'))<= as.Date(max(prod$prod_date)))
       {
         m = nrow(temp)
         temp[m+1, 1] <- as.character(format(as.Date(temp$prod_date[j])+32,'%Y-%m-01'))
@@ -624,19 +625,18 @@ for (i in 1:20) {
     }
     
     temp$prod_date <- as.Date(temp$prod_date)
-    
+
     updated_prod <- sqldf("select a.prod_date, a.prod + coalesce(b.prod, 0) as prod
-                          from updated_prod a left join temp b on a.prod_date = b.prod_date")
-    
+                           from updated_prod a, temp b
+                           where a.prod_date = b.prod_date")
     
     ## new total production
-    hist_prod[n+1,1] <- as.character(format(as.Date(hist_prod$prod_date[n]+32),'%Y-%m-01'))
-    hist_prod[n+1,2] <- round(updated_prod$prod[updated_prod$prod_date == hist_prod$prod_date[(n+1)]]
-                              - if (length(first_prod$prod[first_prod$prod_date == hist_prod[n+1,1]]) == 0) {
-                                0
-                              } else {
-                                first_prod$prod[first_prod$prod_date == hist_prod[n+1,1]]
-                              }, 0)
+    hist_prod[n+1,1] <- as.character(format(as.Date(hist_prod$prod_date[n]+32),'%Y-%m-01')) 
+    
+    temp_val <- if (length(first_prod$prod[first_prod$prod_date == hist_prod[n+1,1]]) == 0) {0
+    } else {first_prod$prod[first_prod$prod_date == hist_prod[n+1,1]]}
+    
+    hist_prod[n+1,2] <- round(updated_prod$prod[updated_prod$prod_date == hist_prod$prod_date[(n+1)]] - temp_val, 0)
   }
 }
 
