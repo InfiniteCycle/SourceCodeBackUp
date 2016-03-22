@@ -461,7 +461,7 @@ future_price <- as.data.frame(matrix(nrow = 11, ncol = 3));
 colnames(future_price)<-c('year', 'month', 'avg');
 
 
-##transform future price table
+## transform future price table
 for (i in 1:11){
   
   if(f_price$month + i <= 12){
@@ -625,7 +625,8 @@ for (i in 1:20) {
     }
     
     temp$prod_date <- as.Date(temp$prod_date)
-
+    updated_prod$prod_date <- as.Date(updated_prod$prod_date)
+    
     updated_prod <- sqldf("select a.prod_date, a.prod + coalesce(b.prod, 0) as prod
                            from updated_prod a, temp b
                            where a.prod_date = b.prod_date")
