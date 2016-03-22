@@ -355,6 +355,9 @@ for (i in 1:15) {
   ndakota_last = ndakota[last_prod_date == prod_date, ]
   forward_dt = ndakota_last[entity_id %in% forward[, entity_id], ]
   
+  # entities whose liq would remain constant.
+  const_forward_dt = ndakota_last[!(entity_id %in% forward[, entity_id]), ]
+  
   # Making forward projection parallelly.
   # Cluster need to be set before.
   forward_liq_proj = foreach(j = 1:nrow(forward_dt), .combine = c, .packages = 'data.table') %dopar%
@@ -371,10 +374,22 @@ for (i in 1:15) {
   temp_ndakota_forward[, liq:= forward_liq_proj]
   
   # Update the last_prod_date for all the entities.
-  ndakota[entity_id %in% forward_dt[,entity_id], last_prod_date:=as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
+  # ndakota[entity_id %in% forward_dt[,entity_id], last_prod_date:=as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
+  ndakota[, last_prod_date:=as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
+  
+  ### data table to store all the entities with constant forward production.
+  temp_ndakota_const = const_forward_dt
+  const_liq = const_forward_dt[, liq] # use the last availale data as the production.
+  
+  temp_ndakota_const[, last_prod_date:= as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
+  temp_ndakota_const[, n_mth:= (n_mth + 1)]
+  temp_ndakota_const[, prod_date:= as.character(format(as.Date(prod_date)+32,'%Y-%m-01'))]
+  temp_ndakota_const[, comment:= "Inserted"]
+  temp_ndakota_const[, liq:= const_liq]
   
   # Append the forward prediction in original data set.
   ndakota = rbindlist(list(ndakota, temp_ndakota_forward))
+  ndakota = rbindlist(list(ndakota, temp_ndakota_const))
   setkey(ndakota, entity_id, basin, first_prod_year)
   cat(sprintf('Congratulations! Iteration %i runs successfully...\n', i))
   cat(sprintf('Interation finished at %s...\n', as.character(Sys.time())))
@@ -571,7 +586,6 @@ setkey(dcl_state_avg, first_prod_year, n_mth)
 #----------------------------------------------------------------------------------------#
 
 
-i = 1; j = 1
 for (i in 1:20) {
   if(as.Date(format(as.Date(max(hist_prod$prod_date))+32,'%Y-%m-01')) > as.Date(max(prod$prod_date)))
   {
