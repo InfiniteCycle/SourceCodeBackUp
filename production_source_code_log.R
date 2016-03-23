@@ -399,8 +399,8 @@ for (i in 1:15) {
   temp_ndakota_const[, liq:= const_liq]
   
   # Update the last_prod_date for all the entities.
-  # ndakota[entity_id %in% forward_dt[,entity_id], last_prod_date:=as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
-  ndakota[, last_prod_date:= as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
+  ndakota[entity_id %in% forward_dt[,entity_id], last_prod_date:=as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
+  ndakota[entity_id %in% const_forward_dt[,entity_id], last_prod_date:=as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
   
   # Append the forward prediction in original data set.
   ndakota = rbindlist(list(ndakota, temp_ndakota_forward,temp_ndakota_const))
@@ -585,7 +585,11 @@ weight = sqldf("select a.*, round(basin_prod/state_prod,6) weight from prod_subs
 avg_weight = plyr::ddply(weight, .(basin), summarise, avg_weight = mean(weight)) %>>%
   as.data.table()
 
-dcl_weight_avg = dcl
+# using the average decline rate of last four years' (2012- 2015) 
+# to make forward projection for new production . 
+dcl_year_avg <- dcl[first_prod_year %in% c(2012:2015) & n_mth <= 15, .(avg = mean(avg)), by = .(basin, n_mth)]
+
+dcl_weight_avg = dcl_year_avg
 basin_name_ = avg_weight$basin
 for(i in 1:length(basin_name_)){
   dcl_weight_avg[basin == basin_name_[i], weighted_avg:= avg*avg_weight[basin == basin_name_[i], avg_weight]]
