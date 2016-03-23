@@ -115,7 +115,7 @@ for (i in 1:nrow(zero)) {
         ndakota[(n_mth == (max_n_mth - 2) & entity_id == temp_entity_id), liq:= temp_liq_lag_2]
         ndakota[(n_mth == (max_n_mth - 2) & entity_id == temp_entity_id), comment:= "Updated"]
         
-        temp_liq_lag_1 = (1 + temp[n_mth == (max_n_mth - 2), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1
+        temp_liq_lag_1 = (1 + ndakota[ (n_mth == (max_n_mth - 2) & entity_id == temp_entity_id), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1
         ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq:= temp_liq_lag_1]
         ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id),comment:="Updated"]
         
@@ -170,7 +170,8 @@ missing <- sqldf("with t0 as (
                  
                  select *
                  from ndakota
-                 where entity_id in (select entity_id from t0 where avg >= 20) and prod_date = last_prod_date")
+                 where entity_id in (select entity_id from t0 where avg >= 20) 
+                 and prod_date = last_prod_date")
 
 missing <- subset(missing, last_prod_date < cutoff_date)
 missing <- as.data.table(missing)
@@ -409,21 +410,6 @@ for (i in 1:15) {
   cat(sprintf('Interation finished at %s...\n', as.character(Sys.time())))
 }
 
-## Keep constant for wells whose production is less than 20 but greater than zero.
-# constant_prod <- sqldf("with t0 as (
-#                        select entity_id, avg(liq) as avg
-#                        from ndakota
-#                        group by entity_id)
-#                        
-#                        select *
-#                        from ndakota
-#                        where entity_id in (select entity_id from t0 where avg < 20 and avg > 0) and prod_date = last_prod_date")
-# 
-# constant_ndakota_forward = sqldf("select * from forward_dt limit 0")
-
-
-###
-
 stopCluster(cl)
 toc_forward <- proc.time()
 time_usage_forward <- toc_forward - tic_forward
@@ -587,18 +573,19 @@ avg_weight = plyr::ddply(weight, .(basin), summarise, avg_weight = mean(weight))
 
 # using the average decline rate of last four years' (2012- 2015) 
 # to make forward projection for new production . 
-dcl_year_avg <- dcl[first_prod_year %in% c(2012:2015) & n_mth <= 15, .(avg = mean(avg)), by = .(basin, n_mth)]
+dcl_year_avg <- dcl[first_prod_year %in% c(2012:2015) & n_mth <= 20, .(avg = mean(avg)), by = .(basin, n_mth)]
 
 dcl_weight_avg = dcl_year_avg
 basin_name_ = avg_weight$basin
+
 for(i in 1:length(basin_name_)){
-  dcl_weight_avg[basin == basin_name_[i], weighted_avg:= avg*avg_weight[basin == basin_name_[i], avg_weight]]
+  dcl_weight_avg[basin == basin_name_[i], .(weighted_avg = avg*avg_weight[basin == basin_name_[i], avg_weight])]
 }
 
 # calculate the weighted average decline rate for each first_prod_year and n_mth combination.
-dcl_state_avg <- plyr::ddply(dcl_weight_avg, .(first_prod_year, n_mth), summarise, avg = sum(weighted_avg))
+dcl_state_avg <- plyr::ddply(dcl_weight_avg, .(n_mth), summarise, avg = sum(weighted_avg))
 dcl_state_avg <- as.data.table(dcl_state_avg)
-setkey(dcl_state_avg, first_prod_year, n_mth)
+setkey(dcl_state_avg, n_mth)
 #----------------------------------------------------------------------------------------#
 
 
@@ -648,17 +635,14 @@ for (i in 1:20) {
         {
           m = nrow(temp)
           temp[m+1, 1] <- as.character(format(as.Date(temp$prod_date[j])+32,'%Y-%m-01'))
-          
-          if(j < max(dcl$n_mth[dcl$first_prod_year == max(dcl$first_prod_year)])) {
-            dcl_factor <- 10^(dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == (j + 1), avg]/100)
-            temp[m+1, 2] <- round((1 + temp$prod[m]) * dcl_factor - 1,0)
-          } else {
-            dcl_factor <- 10^(dcl_state_avg[first_prod_year == max(first_prod_year) & n_mth == max(dcl_state_avg[first_prod_year == max(first_prod_year), n_mth]), avg]/100)
-            temp[m+1, 2] <- round((1 + temp$prod[m]) * dcl_factor - 1,0)
+
+          dcl_factor <- 10^(dcl_state_avg[n_mth == (j + 1), avg]/100)
+          temp[m+1, 2] <- round((1 + temp$prod[m]) * dcl_factor - 1,0)
+
           }
         }
       }
-    }
+
     
     # temp$prod_date <- as.Date(temp$prod_date)
     # updated_prod$prod_date <- as.Date(updated_prod$prod_date)
