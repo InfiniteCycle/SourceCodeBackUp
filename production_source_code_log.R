@@ -34,11 +34,13 @@ cutoff_date <- as.Date(dbGetQuery(base, "select max(prod_date) as max from dev.z
 
 ## Change data struture into data.table
 ndakota <- as.data.table(ndakota)
+## change the liq into daily level.
+ndakota[, liq := round(liq/as.numeric(as.Date(format(as.Date(prod_date) + 32,'%Y-%m-01')) - as.Date(prod_date), units = 'days'),4)]
 ## Set keys for faster searching.
 setkey(ndakota, entity_id, basin, first_prod_year)
 
 ### Load decline rate data for all basins here.
-dcl_all <- dbGetQuery(base, "select * from dev.zxw_log_dcl")
+dcl_all <- dbGetQuery(base, "select * from dev.zxw_nd_adj_log_dcl")
 # dcl_all <- fread('C:/Users/Xiao Wang/Desktop/Programs/Projects/Prod_CO_WY/dcl_all_simple.csv')
 dcl_all <- as.data.table(dcl_all)
 setkey(dcl_all, basin, first_prod_year)
@@ -170,7 +172,7 @@ missing <- sqldf("with t0 as (
                  
                  select *
                  from ndakota
-                 where entity_id in (select entity_id from t0 where avg >= 20) 
+                 where entity_id in (select entity_id from t0 where avg >= round(20/30,4)) 
                  and prod_date = last_prod_date")
 
 missing <- subset(missing, last_prod_date < cutoff_date)
@@ -348,7 +350,7 @@ for (i in 1:15) {
                    
                    select entity_id
                    from t1
-                   where avg >= 20")
+                   where avg >= round(20/30,4)")
   
   forward = as.data.table(forward)
   ndakota_last = ndakota[last_prod_date == prod_date, ]
@@ -369,7 +371,7 @@ for (i in 1:15) {
                    
                    select entity_id
                    from t1
-                   where avg < 20 and avg > 0")
+                   where avg < round(20/30,4) and avg > 0")
   forward_const <- as.data.table(forward_const)
   const_forward_dt = ndakota_last[entity_id %in% forward_const[, entity_id], ]
   
@@ -541,11 +543,9 @@ hist_prod <- dbGetQuery(base, "select prod_date, round(sum(liq)/1000/(extract(da
 # hist_prod$prod_date <- as.Date(hist_prod$prod_date)
 
 ## forward prod from hist wells
-prod <-  plyr::ddply(ndakota, 'prod_date', summarise, sum = sum(liq)/1000)
+prod <-  plyr::ddply(ndakota, 'prod_date', summarise, prod = sum(liq)/1000)
 
-prod <- mutate(prod, prod = sum/as.numeric(as.Date(format(as.Date(prod_date) + 32,'%Y-%m-01')) - as.Date(prod_date), units = c("days")))
-
-updated_prod <- prod[as.Date(prod$prod_date) > max(as.Date(hist_prod$prod_date)),-2]
+updated_prod <- prod[as.Date(prod$prod_date) > max(as.Date(hist_prod$prod_date)), ]
 
 first_prod <- dbGetQuery(base, "select prod_date, round(sum(liq)/1000/(extract(days from (prod_date + interval '1 month' - prod_date))),0) as prod
                          from di.pden_desc a join di.pden_prod b on a.entity_id = b.entity_id
@@ -659,8 +659,6 @@ for (i in 1:20) {
     hist_prod[n+1,2] <- round(updated_prod$prod[updated_prod$prod_date == hist_prod$prod_date[(n+1)]] - temp_val, 0)
   }
 }
-
-
 
 
 
