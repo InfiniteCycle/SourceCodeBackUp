@@ -220,11 +220,11 @@ for (i in 1:nrow(missing)) {
     # j = 0
     for(j in 1:5)
     {
-      if(toDate(temp[, prod_date], j) >= cutoff_date)
+      if(toDate(temp[, prod_date], j) > cutoff_date)
       {
         break
       }
-      if(toDate(temp[, prod_date], j) < cutoff_date)
+      if(toDate(temp[, prod_date], j) <= cutoff_date)
       {
         n = nrow(ndakota)
         ndakota[(entity_id == temp_entity_id), last_prod_date:= toChar(temp[, last_prod_date], j)]
@@ -255,11 +255,11 @@ for (i in 1:nrow(missing)) {
     # j = 1
     for(j in 1:5)
     {
-      if(toDate(temp[, prod_date], j) >= cutoff_date)
+      if(toDate(temp[, prod_date], j) > cutoff_date)
       {
         break
       }
-      if(toDate(temp[, prod_date], j) < cutoff_date)
+      if(toDate(temp[, prod_date], j) <= cutoff_date)
       {
         n = nrow(ndakota)
         ndakota[(entity_id == temp_entity_id), last_prod_date:= toChar(temp[,last_prod_date], j)]
@@ -579,11 +579,11 @@ dcl_weight_avg = dcl_year_avg
 basin_name_ = avg_weight$basin
 
 for(i in 1:length(basin_name_)){
-  dcl_weight_avg[basin == basin_name_[i], .(weighted_avg = avg*avg_weight[basin == basin_name_[i], avg_weight])]
+  dcl_weight_avg[basin == basin_name_[i], .(avg = avg*avg_weight[basin == basin_name_[i], avg_weight])]
 }
 
 # calculate the weighted average decline rate for each first_prod_year and n_mth combination.
-dcl_state_avg <- plyr::ddply(dcl_weight_avg, .(n_mth), summarise, avg = sum(weighted_avg))
+dcl_state_avg <- plyr::ddply(dcl_weight_avg, .(n_mth), summarise, avg = sum(avg))
 dcl_state_avg <- as.data.table(dcl_state_avg)
 setkey(dcl_state_avg, n_mth)
 #----------------------------------------------------------------------------------------#
@@ -664,5 +664,8 @@ for (i in 1:20) {
 
 
 
+EIA <- dbGetQuery(base, "select abbrev, date, value from ei.ei_flat
+                  where abbrev = 'MCRFPND1' and value < 99999 and date >= '2015-01-01'")
+EIA <- as.data.table(EIA)
 
-
+EIA[, days := as.numeric(as.Date(format(as.Date(date) + 32, '%Y-%m-01')) - as.Date(date), unit = ('days'))]
