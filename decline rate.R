@@ -6,7 +6,7 @@ library(kimisc)
 library(tseries)
 library(forecast)
 
-pgsql <- JDBC("org.postgresql.Driver", "C:/postgresql-9.2-1003.jdbc4.jar", "`")
+pgsql <- JDBC("org.postgresql.Driver", "C:/Users/Xiao Wang/Desktop/Programs/postgresql-9.4.1207.jar", "`")
 
 base<-dbConnect(pgsql, "jdbc:postgresql://ec2-54-204-4-247.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory&",user="u9dhckqe2ga9v1",password="pa49dck9aopgfrahuuggva497mh")
 
@@ -31,7 +31,7 @@ first_prod_year <- sqldf("select distinct basin, first_prod_year from dcl_all or
 basin_all <- sqldf("select distinct basin from dcl_all order by 1")
 
 ## max decline rate for each basin each year
-basin_max_mth <- sqldf("select basin, first_prod_year, max(n_mth) as max, max(n_mth) + 20 as max_new
+basin_max_mth_table <- sqldf("select basin, first_prod_year, max(n_mth) as max, max(n_mth) + 20 as max_new
                         from dcl_all
                         group by basin, first_prod_year
                         order by 1, 2")
@@ -114,12 +114,12 @@ for (k in (1:nrow(basin_all))) {
   years <- first_prod_year$first_prod_year[first_prod_year$basin == basin]
   
   ## first prod year with less than 36 months produced
-  replace <- basin_max_mth[basin_max_mth$basin == basin & basin_max_mth$max < 36,]
+  replace <- basin_max_mth_table[basin_max_mth_table$basin == basin & basin_max_mth_table$max < 36,]
   
   ## forward 15 month
   for (h in (1:length(years))) {
     
-    temp <- dcl_all[dcl_all$basin == basin & dcl_all$first_prod_year == years[h,],]
+    temp <- dcl_all[dcl_all$basin == basin & dcl_all$first_prod_year == years[h],]
     #first prod year in temp
     year <- temp$first_prod_year[1]
     #max mth produced in temp
@@ -153,25 +153,7 @@ for (k in (1:nrow(basin_all))) {
 
 
 
-
-sqldf(c("drop table if exists dev.zxw_log_dcl;
-        create temp table dev.zxw_log_dcl as (
-        select * from dcl_all
-        "),
-      dbname="d43mg7o903brjv",host="ec2-54-204-4-247.compute-1.amazonaws.com",
-      port=5432,user="u9dhckqe2ga9v1",password="pa49dck9aopgfrahuuggva497mh")
-
-
-
-
-dcl_all <- paste("CREATE TABLE dev.zxw_dcl_all_log AS(dcl_all)")
-
-write.csv(dcl_all, 'C:/Users/Xiao Wang/Desktop/Programs/Projects/Prod_Revised/dcl_all_log.csv', row.names = F)
-
-dcl <- dbSendUpdate(base, "create table dev.zxw_log_dcl_all AS 
-                  (select * from dev.zsz_williston_dcl_dec limit 0)")
-
-dbWriteTable(base, name = 'dev.zxw_log_dcl', value = dcl_all, overwrite = F, row.names =  F)
+dbWriteTable(base, name = 'dev.zxw_nd_adj_log_dcl', value = dcl_all, overwrite = F, row.names =  F)
 
 
 print(Sys.time())
