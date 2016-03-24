@@ -9,10 +9,10 @@ library(doParallel)
 library(data.table)
 library(pipeR)
 
-# Set the driver of the PostgreSQL, the driver file (postgresql-9.4.1207.jar) must be downloaded first.
+## Set the driver of the PostgreSQL, the driver file (postgresql-9.4.1207.jar) must be downloaded first.
 pgsql <- JDBC("org.postgresql.Driver", "C:/Users/Xiao Wang/Desktop/Programs/postgresql-9.4.1207.jar", "`")
 
-# Establish the connection with Database Prod!
+## Establish the connection with Database Prod!
 base<-dbConnect(pgsql, "jdbc:postgresql://ec2-54-204-4-247.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory",
                 user="u9dhckqe2ga9v1",
                 password="pa49dck9aopgfrahuuggva497mh")
@@ -20,9 +20,15 @@ base<-dbConnect(pgsql, "jdbc:postgresql://ec2-54-204-4-247.compute-1.amazonaws.c
 dev_base <- dbConnect(pgsql, "jdbc:postgresql://ec2-107-22-245-176.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory",
                       user="u1e126kp11a30t",
                       password="p99mbmnfeqdh729mn86vt1v085")
-#################################################################################################
-setwd("C:/Users/Xiao Wang/Desktop/Programs/Projects/Prod_Revised")
 
+## Set working directory.
+setwd("C:/Users/Xiao Wang/Desktop/Programs")
+
+## Load all the user-defined functions. 
+  # The source file should be put in the working directory.
+source("Github/SourceCodeBackUp/function_source.R")
+
+#################################################################################################
 ### Loading drilling info data set here.
 ndakota <- dbGetQuery(base, "select * from dev.zsz_nd_dec")
 ndakota <- mutate(ndakota, comment = "")
@@ -65,19 +71,6 @@ setkey(basin_max_mth_tbl, basin, first_prod_year)
 #-----------------------------------------------------------------#
 # Part 1 -- Filling entity production which is actually not zero. #
 #-----------------------------------------------------------------#
-
-## Define a function to match the decline rate.
-## 'dcl' table must be loaded.
-find_dcl_factor = function(basin_, first_, month_){
-  # Find the log decline rate first.
-  dcl_rate = dcl[(first_prod_year == first_ & basin == basin_) & n_mth == month_, avg]/100
-  # the decline rate is calculated as r(t) = log(1 + P(t)) - log(1 + P(t - 1))
-  # the decline rate factor is calculated as 10^dcl)
-  # The next period production is: P(t) = (1 + P(t - 1))*10^(dcl) -1
-  dcl_factor = 10^(dcl_rate)
-  return(dcl_factor)
-}
-
 ### Main part.
 tic_zero = proc.time() # Record the start time...
 for (i in 1:nrow(zero)) {
@@ -154,16 +147,6 @@ ndakota_zero = ndakota # replicate the filled table as a backup
 # Part Two -- Filling the missing values. #
 #-----------------------------------------#
 
-## Check the average production for the last 6 month to determine the threshold.
-# check_avg = dbGetQuery(base, " select entity_id, round(avg(liq),0) as avg
-#                        from dev.zxw_co_dec
-#                        where prod_date >= (last_prod_date - interval '6 month')
-#                        group by entity_id")
-# check_avg = as.data.table(check_avg)
-#
-# hist(check_avg[avg <= 150, avg])
-##
-
 ## Entity with missing data
 missing <- sqldf("with t0 as (
                  select entity_id, avg(liq) as avg
@@ -184,18 +167,6 @@ missing[, prod_date := as.character(prod_date)]
 ## Change data type for table union.
 ndakota[, last_prod_date := as.character(last_prod_date)]
 ndakota[, prod_date := as.character(prod_date)]
-
-## Define a function for data type change.
-toDate <- function(date_char, j){
-  date_res <- as.Date(format(as.Date(date_char) + 32*j, '%Y-%m-01'))
-  return(date_res)
-}
-
-toChar <- function(date_real, j){
-  char_res <- as.character(format(as.Date(date_real)+32*j,'%Y-%m-01'))
-  return(char_res)
-}
-
 
 ## Main program.
 tic_missing = proc.time()
@@ -295,37 +266,6 @@ ndakota_missing = ndakota
 # Part Three -- 15 month forward projection   #
 #---------------------------------------------#
 
-## Define a function to make forward projection
-## This function could be executed parallelly.
-
-forward_liq_func <- function(j){
-  temp <- forward_dt[j, ]
-  temp_entity_id <- temp[,entity_id]
-  temp_basin <- temp[, basin]
-  
-  if (temp[, first_prod_year] < 1980) {
-    first <- 1980 }
-  else {
-    first <- temp[, first_prod_year]
-  }
-  
-  ## max month of production in basin where the entity is  and from the year that entity first start producing
-  basin_max_mth <- basin_max_mth_tbl[basin == temp_basin & first_prod_year == first, max]
-  
-  ## Actual max month of production of the entity
-  max_n_mth <- temp[prod_date == last_prod_date[1], n_mth]
-  
-  if (max_n_mth >= basin_max_mth) {
-    dcl_mth <- basin_max_mth + 1 
-  } else {
-    dcl_mth <- max_n_mth + 1
-  }
-  
-  # dcl_mth <- (max_n_mth + 1)
-  temp_dt = data.table("liq"= round((1 + temp[,liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1, 0))
-  return(temp_dt$liq)
-}
-
 ## Parallel computing setting.
 numOfWorkers <- 3 # the number of threads
 cl <- makeCluster(numOfWorkers) # create the clusters.
@@ -418,16 +358,12 @@ time_usage_forward <- toc_forward - tic_forward
 time_usage_forward
 ndakota_backup = ndakota
 
-test = plyr::ddply(ndakota[prod_date >= '2015-06-01',], "prod_date", summarize, total_prod = sum(liq)/1000) 
-test = as.data.table(test)
-test[, daily_prod:= total_prod/as.numeric(as.Date(format(as.Date(prod_date) + 32,'%Y-%m-01')) - as.Date(prod_date), units = c("days"))]
-
-
 #-------------------------------------------------------------
 # Part Four -- New production prediction
 #-------------------------------------------------------------
 
-## forward prediction for new production #########################################################################################################
+#########################################################################################################
+## forward prediction for new production
 
 # sales price
 hist_price <- dbGetQuery(dev_base, "with t0 as (
@@ -496,27 +432,6 @@ for (i in 1:11){
 }
 
 price <- as.data.frame(rbind(hist_price, future_price))
-
-## calculate the moving average
-Moving_Avg <- function(data, interval){
-  n = length(data)
-  m = interval
-  SMA = data.frame('SMA' = rep(0, (n - m + 1)))
-  
-  for(i in n:1){
-    if((i - m + 1) <= 0){
-      break
-    } else{
-      avg <- mean(data[i: (i - m + 1)])
-      j = (n - i + 1)
-      SMA[j,1] = avg
-    }
-  }
-  SMA = SMA[c((n - m + 1):1),]
-  
-  return(as.data.frame(SMA))
-}
-
 
 
 # prod of new wells
