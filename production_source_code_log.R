@@ -22,11 +22,11 @@ dev_base <- dbConnect(pgsql, "jdbc:postgresql://ec2-107-22-245-176.compute-1.ama
                       password="p99mbmnfeqdh729mn86vt1v085")
 
 ## Set working directory.
-setwd("C:/Users/Xiao Wang/Desktop/Programs")
+setwd("C:/Users/Xiao Wang/Desktop/Programs/Projects/Prod_Revised/")
 
 ## Load all the user-defined functions. 
   # The source file should be put in the working directory.
-source("Github/SourceCodeBackUp/function_source.R")
+source("C:/Users/Xiao Wang/Desktop/Programs/Github/SourceCodeBackUp/function_source.R")
 
 #################################################################################################
 ### Loading drilling info data set here.
@@ -71,72 +71,21 @@ setkey(basin_max_mth_tbl, basin, first_prod_year)
 #-----------------------------------------------------------------#
 # Part 1 -- Filling entity production which is actually not zero. #
 #-----------------------------------------------------------------#
-### Main part.
-tic_zero = proc.time() # Record the start time...
-for (i in 1:nrow(zero)) {
-  #choose prod data for past 6 month
-  temp <- ndakota[entity_id == zero[i,entity_id],]
-  temp_entity_id <- temp[1,entity_id]
-  temp_basin <- temp[1,basin]
-  
-  if (temp[1,first_prod_year] < 1980) {
-    first <- 1980 } else {
-      first <- temp[1,first_prod_year]
-    }
-  
-  ## max month of production in basin where the entity is and from the year that entity first start producing
-  basin_max_mth <- basin_max_mth_tbl[basin == temp_basin & first_prod_year == first, max]
-  
-  ## Actual max month of production of the entity
-  max_n_mth <- temp[prod_date == last_prod_date[1], n_mth]
-  
-  ## find the max month of dcl
-  if (max_n_mth >= basin_max_mth) {
-    dcl_mth <- basin_max_mth
-  } else {
-    dcl_mth <- max_n_mth
-  }
-  
-  if (temp[n_mth == (max_n_mth - 1),liq] == 0) {
-    
-    if (temp[n_mth == (max_n_mth - 2),liq] == 0) {
-      
-      if (temp[n_mth == (max_n_mth - 3),liq] == 0) {
-        
-        ndakota[entity_id == temp_entity_id, comment:= "All Zeros"]
-      } else {
-        
-        temp_liq_lag_2 = (1 + temp[n_mth == (max_n_mth - 3), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 2) - 1
-        ndakota[(n_mth == (max_n_mth - 2) & entity_id == temp_entity_id), liq:= temp_liq_lag_2]
-        ndakota[(n_mth == (max_n_mth - 2) & entity_id == temp_entity_id), comment:= "Updated"]
-        
-        temp_liq_lag_1 = (1 + ndakota[ (n_mth == (max_n_mth - 2) & entity_id == temp_entity_id), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1
-        ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq:= temp_liq_lag_1]
-        ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id),comment:="Updated"]
-        
-        temp_liq_lag_0 = (1 + ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq])  * find_dcl_factor(temp_basin, first, dcl_mth) - 1
-        ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), liq:= temp_liq_lag_0]
-        ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), comment:="Updated"]
-      }
-    } else {
-      
-      temp_liq_lag_1 = (1 + temp[n_mth == (max_n_mth - 2), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1
-      ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq:= temp_liq_lag_1]
-      ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), comment:="Updated"]
-      
-      temp_liq_lag_0 = (1 + ndakota[(n_mth == (max_n_mth - 1) & entity_id == temp_entity_id), liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1
-      ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), liq:= temp_liq_lag_0]
-      ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), comment:="Updated"]
-    }
-    
-  } else {
-    
-    temp_liq_lag_0 = (1 + temp[(n_mth == (max_n_mth - 1)), liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1
-    ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), liq:= temp_liq_lag_0]
-    ndakota[(n_mth == max_n_mth & entity_id == temp_entity_id), comment:="Updated"]
-  }
-}
+## In this part, two functions need to be loaded from function_source:
+## @7th: filling_zero(), and @8th update_table()
 
+### Main part.
+numberOfWorkers = 3
+cl_zero <- makeCluster(numberOfWorkers)
+registerDoParallel(cl_zero)
+
+tic_zero = proc.time() # Record the start time...
+# collect all the updated entries.
+fill_zero = foreach(i = 1:nrow(zero), .combine = rbind, .packages =  'data.table') %dopar%
+  filling_zero(i, prod_tbl = permian, basin_max_mth_tbl_ = basin_max_mth_tbl)
+
+# update the orignal table with values calculated in the last step.
+permian <- update_table(orig_tbl = permian, update_val_tbl = fill_zero)
 toc_zero = proc.time() # Record ending time.
 time_usage_zero = toc_zero - tic_zero
 time_usage_zero
