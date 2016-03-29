@@ -32,10 +32,12 @@ source("C:/Users/Xiao Wang/Desktop/Programs/Github/SourceCodeBackUp/function_sou
 
 ## Loading drilling info data set here.
 
-permian <- partition_load('dev.zsz_permian_dec', part_num = 10)
-ndakota <- permian
+ndakota <- partition_load('dev.zsz_permian_dec', part_num = 10)
 
-ndakota <- dbGetQuery(base, "select * from dev.zsz_nd_dec")
+#------------#
+cat('Production data was loaded successfully...\n')
+#------------#
+
 ## Change data struture into data.table
 ndakota <- as.data.table(ndakota)
 ## Set keys for faster searching.
@@ -49,11 +51,12 @@ ndakota[, prod_date:= as.Date(prod_date)]
 cutoff_date <- as.Date(max(ndakota[,prod_date]))
 
 ## change the liq into daily level.
-ndakota[, liq := round(liq/as.numeric(as.Date(format(as.Date(prod_date) + 32,'%Y-%m-01')) - as.Date(prod_date), units = 'days'),4)]
+## This could be done directly in the database.
+# ndakota[, liq := liq/as.numeric(as.Date(format(as.Date(prod_date) + 32,'%Y-%m-01')) - as.Date(prod_date), units = 'days')]
 
 
 ## Load decline rate data for all basins here.
-dcl_all <- dbGetQuery(base, "select * from dev.zxw_nd_adj_log_dcl")
+dcl_all <- dbGetQuery(base, "select * from dev.zsz_permian_adj_log_dcl")
 # dcl_all <- fread('C:/Users/Xiao Wang/Desktop/Programs/Projects/Prod_CO_WY/dcl_all_simple.csv')
 dcl_all <- as.data.table(dcl_all)
 setkey(dcl_all, basin, first_prod_year)
@@ -61,6 +64,10 @@ setkey(dcl_all, basin, first_prod_year)
 basin_name <- unique(ndakota[, basin])
 ## Subset the decline rate table for faster matching.
 dcl <- dcl_all[basin %in% basin_name, ]
+
+#------------#
+cat('Decline rate data was loaded successfully...\n')
+#------------#
 
 ### Find entity with zero production.
 zero <- sqldf("select entity_id
@@ -86,6 +93,12 @@ numberOfWorkers = 3
 cl_zero <- makeCluster(numberOfWorkers)
 registerDoParallel(cl_zero)
 
+#------------#
+cat(sprintf('The number of threads is %i...\n', numberOfWorkers))
+cat('#-------------------------------------------#\n')
+cat(sprintf('Start filling zero at %s...\n', as.character(Sys.time())))
+#------------#
+
 tic_zero = proc.time() # Record the start time...
 # collect all the updated entries.
 fill_zero = foreach(i = 1:nrow(zero), .combine = rbind, .packages =  'data.table') %dopar%
@@ -99,13 +112,25 @@ time_usage_zero
 
 stopCluster(cl_zero)
 # replicate the filled table as a backup
-# ndakota_zero = ndakota 
+ndakota_zero = ndakota
+setkey(ndakota, entity_id, basin, first_prod_year)
+
+#------------#
+cat(sprintf('Filling zero was executed successfully at %s...\n', as.character(Sys.time())))
+cat('#-------------------------------------------#\n')
+#------------#
+
 
 #-----------------------------------------#
 # Part Two -- Filling the missing values. #
 #-----------------------------------------#
 cl_miss <- makeCluster(numberOfWorkers)
 registerDoParallel(cl_miss)
+
+#------------#
+cat(sprintf('Start filling missing values at %s...\n',as.character(Sys.time())))
+#------------#
+
 
 ## Entity with missing data
 missing <- sqldf("with t0 as (
@@ -138,7 +163,7 @@ setkey(fill_miss, entity_id, n_mth)
 last_prod_date_tbl <- fill_miss[!duplicated(entity_id, fromLast = T), .(entity_id, last_prod_date)]
 updated_date = last_prod_date_tbl[1, last_prod_date]
 # Add fill_miss table into original production table.
-ndakota <- rbindlist(ndakota, fill_miss)
+ndakota <- rbindlist(list(ndakota, fill_miss))
 # Due to the cutoff date is set, so the last_prod_dates for filled data are the same.
 ndakota[entity_id %in% last_prod_date_tbl[,entity_id], last_prod_date := updated_date]
 
@@ -146,19 +171,30 @@ toc_missing = proc.time()
 time_usage_missing = toc_missing - tic_missing
 time_usage_missing
 
-# ndakota_missing = ndakota
+ndakota_missing = ndakota
 stopCluster(cl_miss)
+
+setkey(ndakota, entity_id, basin, first_prod_year)
+#------------#
+cat(sprintf('Filling missing values was executed successfully at %s...\n', as.character(Sys.time())))
+cat('#-------------------------------------------#\n')
+#------------#
+
 
 #---------------------------------------------#
 # Part Three -- 15 month forward projection   #
 #---------------------------------------------#
 
 ## Parallel computing setting.
-cl_forward <- makeCluster(numOfWorkers) # create the clusters.
+cl_forward <- makeCluster(numberOfWorkers) # create the clusters.
 registerDoParallel(cl_forward) # register the cluster setting to use multicores.
 
-## Main Routine.
 
+#------------#
+cat(sprintf('Start making forward projection at %s...\n',as.character(Sys.time())))
+#------------#
+
+## Main Routine.
 tic_forward = proc.time()
 for (i in 1:15) {
   forward <- sqldf("with t0 as (
@@ -242,11 +278,13 @@ time_usage_forward <- toc_forward - tic_forward
 time_usage_forward
 
 stopCluster(cl_forward)
-# ndakota_backup = ndakota
 
-#-------------------------------------------------------------
-# Part Four -- New production prediction
-#-------------------------------------------------------------
+cat(sprintf('Forward projection was executed successfully at %s...\n', as.character(Sys.time())))
+cat('#-------------------------------------------#\n')
+
+#-------------------------------------------------------------#
+# Part Four -- New production prediction                      #
+#-------------------------------------------------------------#
 
 #########################################################################################################
 ## forward prediction for new production
