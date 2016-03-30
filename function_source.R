@@ -52,7 +52,7 @@ forward_liq_func <- function(j){
   }
 
   # dcl_mth <- (max_n_mth + 1)
-  temp_dt = data.table("liq"= round((1 + temp[,liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1, 0))
+  temp_dt = data.table("liq"= (1 + temp[,liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1)
   return(temp_dt$liq)
 }
 
@@ -79,44 +79,45 @@ Moving_Avg <- function(data, interval){
 
 ## @@ 6th Function
 ### The function will return a data.table containing basin DI.
-partition_load <-function(tbl_name, part_num){
-  ### tbl_name: the large table to extract basin data.
-  ### tbl_name should be like: dev.zsz_permian_dec
+partition_load <-function(basin_name, part_num){
+  ### basin_name: the basin that needed.
   ### part_num: how many parts need to be partitioned.
 
   ## load required library first.
-  library(pipeR) # if loaded before, this line can be commented.
+    # if loaded before, this line can be commented.
+  library(pipeR) 
   library(data.table)
   ###
 
-  first_prod_year <- sprintf("select distinct(first_prod_year) from %s
-                             order by first_prod_year", tbl_name) %>>%
-                             {dbGetQuery(base, .)}
+  first_prod_year <- sprintf("select distinct(first_prod_year) from zsz.crd_prod_base
+                              where basin = '%s'
+                             order by first_prod_year", basin_name) %>>%
+                             {dbGetQuery(dev_base, .)}
   n = nrow(first_prod_year)
   PARTNUM <- part_num
   ind <- seq(from = 1, to = n,  by = (n - 1)/PARTNUM) # partition the table into 5 parts
   thres <- first_prod_year[ind[2:PARTNUM],] # threshold for making partitions.
 
   # create an empty data table to hold all values.
-  result_table <- sprintf("select * from %s limit 0", tbl_name) %>>%
-                          {dbGetQuery(base, .)} %>>%
+  result_table <- sprintf("select * from zsz.crd_prod_base limit 0") %>>%
+                          {dbGetQuery(dev_base, .)} %>>%
                           {as.data.table(.)}
 
   for(i in 1:(PARTNUM)){
     if(i == 1){
-      query <- sprintf("select * from %s
-                       where first_prod_year < %s", tbl_name, thres[i])
+      query <- sprintf("select * from zsz.crd_prod_base
+                        where basin = '%s' and first_prod_year < %s", basin_name, thres[i])
     } else if(i == (PARTNUM)){
-      query <- sprintf("select * from %s
-                       where first_prod_year >= %s", tbl_name, thres[i - 1])
+      query <- sprintf("select * from zsz.crd_prod_base
+                       where basin = '%s' and first_prod_year >= %s", basin_name, thres[i - 1])
     } else{
-      query <- sprintf("select * from %s where first_prod_year >= %s
-                       and first_prod_year < %s", tbl_name,
+      query <- sprintf("select * from zsz.crd_prod_base 
+                       where basin = '%s' and first_prod_year >= %s
+                       and first_prod_year < %s", basin_name,
                        thres[i - 1], thres[i])
     }
-
     ## using data.table and rbindlist for fast table binding.
-    partition <- dbGetQuery(base, query) %>>% as.data.table()
+    partition <- dbGetQuery(dev_base, query) %>>% as.data.table()
     result_table <- rbindlist(list(result_table, partition))
   }
   return(result_table)

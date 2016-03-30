@@ -3,7 +3,6 @@ library(rJava)
 library(RJDBC)
 library(sqldf)
 library(plyr)
-library(kimisc)
 library(foreach)
 library(doParallel)
 library(data.table)
@@ -31,8 +30,7 @@ source("C:/Users/Xiao Wang/Desktop/Programs/Github/SourceCodeBackUp/function_sou
 #--------------------------------------------------------------------------------------------------#
 
 ## Loading drilling info data set here.
-
-ndakota <- partition_load('dev.zsz_permian_dec', part_num = 10)
+ndakota <- partition_load('WILLISTON', part_num = 10)
 
 #------------#
 cat('Production data was loaded successfully...\n')
@@ -56,7 +54,7 @@ cutoff_date <- as.Date(max(ndakota[,prod_date]))
 
 
 ## Load decline rate data for all basins here.
-dcl_all <- dbGetQuery(base, "select * from dev.zsz_permian_adj_log_dcl")
+dcl_all <- dbGetQuery(base, "select * from dev.zxw_nd_adj_log_dcl")
 # dcl_all <- fread('C:/Users/Xiao Wang/Desktop/Programs/Projects/Prod_CO_WY/dcl_all_simple.csv')
 dcl_all <- as.data.table(dcl_all)
 setkey(dcl_all, basin, first_prod_year)
