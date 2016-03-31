@@ -18,7 +18,7 @@ toDate <- function(date_char, j){
   return(date_res)
 }
 
-## @@ 3th Function
+## @@ 3th Function-
 ## Define a function for changing data type. Date --> Char
 toChar <- function(date_real, j){
   char_res <- as.character(format(as.Date(date_real)+32*j,'%Y-%m-01'))
@@ -85,7 +85,7 @@ partition_load <-function(basin_name, part_num){
 
   ## load required library first.
     # if loaded before, this line can be commented.
-  library(pipeR) 
+  library(pipeR)
   library(data.table)
   ###
 
@@ -111,7 +111,7 @@ partition_load <-function(basin_name, part_num){
       query <- sprintf("select * from zsz.crd_prod_base
                        where basin = '%s' and first_prod_year >= %s", basin_name, thres[i - 1])
     } else{
-      query <- sprintf("select * from zsz.crd_prod_base 
+      query <- sprintf("select * from zsz.crd_prod_base
                        where basin = '%s' and first_prod_year >= %s
                        and first_prod_year < %s", basin_name,
                        thres[i - 1], thres[i])
@@ -125,7 +125,7 @@ partition_load <-function(basin_name, part_num){
 
 
 ## @@ 7th Function
-## This function return a data.table containing all the updated entries which used to be zeros. 
+## This function return a data.table containing all the updated entries which used to be zeros.
 ## prod_tbl should be the production table which needs to be updated, like: ndakota, permian etc.
 ## basin_max_mth_tbl_ contains info about max production month.
 
@@ -134,62 +134,61 @@ filling_zero <- function(i, prod_tbl){
   temp <- prod_tbl[entity_id == zero[i,entity_id],]
   temp_entity_id <- temp[1,entity_id]
   temp_basin <- temp[1,basin]
-  
+
   if (temp[1,first_prod_year] < 1980) {
     first <- 1980 } else {
       first <- temp[1,first_prod_year]
     }
-  
+
   ## max month of production in basin where the entity is and from the year that entity first start producing
   basin_max_mth <- basin_max_mth_tbl[basin == temp_basin & first_prod_year == first, max]
-  
+
   ## Actual max month of production of the entity
   max_n_mth <- temp[prod_date == last_prod_date[1], n_mth]
-  
+
   ## find the max month of dcl
   if (max_n_mth >= basin_max_mth) {
     dcl_mth <- basin_max_mth
   } else {
     dcl_mth <- max_n_mth
   }
-  
+
   if (temp[n_mth == (max_n_mth - 1),liq] == 0) {
-    
+
     if (temp[n_mth == (max_n_mth - 2),liq] == 0) {
-      
+
       if (temp[n_mth == (max_n_mth - 3),liq] == 0) {
-        
-        prod_tbl[entity_id == temp_entity_id, comment:= "All Zeros"]
+
         temp_dt <- data.table('entity_id' = temp_entity_id,
                               'n_mth' = max_n_mth - 3,
                               'liq' = 0,
                               'comment' = "All Zeros")
       } else {
-        
+
         temp_liq_lag_2 = (1 + temp[n_mth == (max_n_mth - 3), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 2) - 1
         temp_liq_lag_1 = (1 + temp_liq_lag_2) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1
         temp_liq_lag_0 = (1 + temp_liq_lag_1) * find_dcl_factor(temp_basin, first, dcl_mth) - 1
-        
+
         temp_dt <- data.table('entity_id' = rep(temp_entity_id,3),
-                              'n_mth' = c((dcl_mth - 2), (dcl_mth - 1), dcl_mth),
-                              'liq' = c(temp_liq_lag_2,temp_liq_lag_1, temp_liq_lag_0),
+                              'n_mth' = c((max_n_mth - 2), (max_n_mth - 1), max_n_mth),
+                              'liq' = pmax(c(temp_liq_lag_2,temp_liq_lag_1, temp_liq_lag_0), 0),
                               'comment' = rep("Updated",3))
       }
     } else {
-      
+
       temp_liq_lag_1 = (1 + temp[n_mth == (max_n_mth - 2), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1
       temp_liq_lag_0 = (1 + temp_liq_lag_1) * find_dcl_factor(temp_basin, first, dcl_mth) - 1
       temp_dt <- data.table('entity_id' = rep(temp_entity_id,2),
-                            'n_mth' = c((dcl_mth - 1), dcl_mth),
-                            'liq' = c(temp_liq_lag_1, temp_liq_lag_0),
+                            'n_mth' = c((max_n_mth - 1), max_n_mth),
+                            'liq' = pmax(c(temp_liq_lag_1, temp_liq_lag_0), 0),
                             'comment' = rep("Updated",2))
     }
-    
+
   } else {
     temp_liq_lag_0 = (1 + temp[(n_mth == (max_n_mth - 1)), liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1
     temp_dt <- data.table('entity_id' = temp_entity_id,
-                          'n_mth' = dcl_mth,
-                          'liq' = temp_liq_lag_0,
+                          'n_mth' = max_n_mth,
+                          'liq' = max(temp_liq_lag_0, 0),
                           'comment' = "Updated")
   }
   return(temp_dt)
@@ -204,10 +203,10 @@ filling_zero <- function(i, prod_tbl){
 update_table <- function(orig_tbl, update_val_tbl){
   ## orig_table: original production table, like: ndakota, permian etc.
   ## update_val_tbl: this table is compueted and returned by filling_zero.
-  
+
   zero <- update_val_tbl[comment == 'All Zeros', ]  # zero part
   updated <- update_val_tbl[comment == 'Updated', ] # updated part
-  orig_tbl[entity_id %in% zero[,entity_id], comment:= 'All Zeros']
+  orig_tbl[entity_id %in% zero[, entity_id], comment:= 'All Zeros']
   update_df <- sqldf("select a.*, b.liq liq_b, b.comment comment_b from orig_tbl a left join updated b
                      on a.entity_id = b.entity_id and a.n_mth = b.n_mth")
   update_dt <- as.data.table(update_df)
@@ -217,7 +216,7 @@ update_table <- function(orig_tbl, update_val_tbl){
   update_dt[, liq:=liq_b]
   update_dt[, comment_b:=NULL]
   update_dt[, liq_b:=NULL]
-  
+
   # return the updated orignal table.
   # It's better to overwrite the previous one.
   return(update_dt)
@@ -231,23 +230,23 @@ filling_missing <- function(i){
   temp <- missing[i,]
   temp_entity_id <- temp[, entity_id]
   temp_basin <- temp[, basin]
-  
+
   if (temp[1, first_prod_year] < 1980) {
     first <- 1980 } else {
       first <- temp[1, first_prod_year]
     }
-  
+
   ## max month of production in basin where the entity is  and from the year that entity first start producing
   basin_max_mth <- basin_max_mth_tbl[basin == temp_basin & first_prod_year == first, max]
-  
+
   ## Actual max month of production of the entity
   max_n_mth <- temp[prod_date == last_prod_date[1], n_mth]
-  
+
   temp_hold_dt <- temp[entity_id == 0, ]
   ## find the max month of dcl
   if (max_n_mth >= basin_max_mth) {
     dcl_mth <- basin_max_mth
-    
+
     # j = 0
     for(j in 1:5)
     {
@@ -257,7 +256,7 @@ filling_missing <- function(i){
       }
       if(toDate(temp[, prod_date], j) <= cutoff_date)
       {
-        
+
         if(j == 1) {
           temp_liq = (1 + temp[, liq]) *find_dcl_factor(temp[, basin], first, dcl_mth) - 1
           temp_liq_last = temp_liq
@@ -265,7 +264,7 @@ filling_missing <- function(i){
           temp_liq = (1 + temp_liq_last) * find_dcl_factor(temp[, basin], first, dcl_mth) - 1
           temp_liq_last = temp_liq
         }
-        
+
         # Create a temporary data table to store the generated row.
         temp_dt = data.table(
           "entity_id" = temp_entity_id,
@@ -274,15 +273,15 @@ filling_missing <- function(i){
           "last_prod_date" = toChar(temp[,last_prod_date], j),
           "n_mth" = (temp[,n_mth] + j),
           "prod_date" = toChar(temp[, prod_date], j),
-          "liq" = temp_liq,
+          "liq" = max(temp_liq, 0),
           "comment" = "Inserted")
         temp_hold_dt = rbindlist(list(temp_hold_dt, temp_dt))
       }
     }
-    
+
   } else {
     dcl_mth <- max_n_mth
-    
+
     # j = 1
     for(j in 1:5)
     {
@@ -299,7 +298,7 @@ filling_missing <- function(i){
           temp_liq = (1 + temp_liq_last) * find_dcl_factor(temp_basin, first, dcl_mth + j) - 1
           temp_liq_last = temp_liq
         }
-        
+
         temp_dt = data.table(
           "entity_id" = temp_entity_id,
           "basin" = temp_basin,
@@ -307,7 +306,7 @@ filling_missing <- function(i){
           "last_prod_date" = toChar(temp[,last_prod_date], j),
           "n_mth" = (temp[,n_mth] + j),
           "prod_date" = toChar(temp[,prod_date], j),
-          "liq" = temp_liq,
+          "liq" = max(temp_liq, 0),
           "comment" = "Inserted")
         temp_hold_dt = rbindlist(list(temp_hold_dt, temp_dt))
       }
