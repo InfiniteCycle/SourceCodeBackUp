@@ -79,8 +79,8 @@ Moving_Avg <- function(data, interval){
 
 ## @@ 6th Function
 ### The function will return a data.table containing basin DI.
-partition_load <-function(basin_name, part_num, tbl_name = 'zsz.crd_prod_base'){
-  ### basin_name: the basin that needed.
+partition_load <-function(basin_set, part_num, tbl_name = 'zsz.crd_prod_base'){
+  ### basin_set: the basins that needed.
   ### part_num: how many parts need to be partitioned.
 
   ## load required library first.
@@ -90,8 +90,8 @@ partition_load <-function(basin_name, part_num, tbl_name = 'zsz.crd_prod_base'){
   ###
 
   first_prod_year <- sprintf("select distinct(first_prod_year) from %s
-                              where basin = '%s'
-                             order by first_prod_year", tbl_name, basin_name) %>>%
+                              where basin in %s
+                             order by first_prod_year", tbl_name, basin_set) %>>%
                              {dbGetQuery(dev_base, .)}
   n = nrow(first_prod_year)
   PARTNUM <- part_num
@@ -106,14 +106,14 @@ partition_load <-function(basin_name, part_num, tbl_name = 'zsz.crd_prod_base'){
   for(i in 1:(PARTNUM)){
     if(i == 1){
       query <- sprintf("select * from %s
-                        where basin = '%s' and first_prod_year < %s", tbl_name, basin_name, thres[i])
+                        where basin in %s and first_prod_year < %s", tbl_name, basin_set, thres[i])
     } else if(i == (PARTNUM)){
       query <- sprintf("select * from %s
-                       where basin = '%s' and first_prod_year >= %s", tbl_name, basin_name, thres[i - 1])
+                       where basin in %s and first_prod_year >= %s", tbl_name, basin_set, thres[i - 1])
     } else{
       query <- sprintf("select * from %s
-                       where basin = '%s' and first_prod_year >= %s
-                       and first_prod_year < %s", tbl_name, basin_name,
+                       where basin in %s and first_prod_year >= %s
+                       and first_prod_year < %s", tbl_name, basin_set,
                        thres[i - 1], thres[i])
     }
     ## using data.table and rbindlist for fast table binding.
@@ -318,11 +318,11 @@ filling_missing <- function(i, cutoff_date){
 }
 
 ## @10th Function. Output basin info of program.
-initializing <- function(BASIN_NAME, PROD_TBL, DCL_TBL, BASIN_MAX_MTH_TBL, numberOfWorkers){
+initializing <- function(BASIN_SET, PROD_TBL, DCL_TBL, BASIN_MAX_MTH_TBL, numberOfWorkers){
   cat('## -------------------------------------------------## \n')
-  cat(sprintf("  Crude Production for '%s' Initializing...\n\n", BASIN_NAME))
+  cat(sprintf("  Crude Production for %s Initializing...\n\n", BASIN_SET))
   cat("   Please Checking Basic Info Listed:\n\n")
-  cat(sprintf("   * BASIN_NAME: %s\n", BASIN_NAME))
+  cat(sprintf("   * BASIN_SET: %s\n", BASIN_SET))
   cat(sprintf("   * PROD_TBL: %s\n", PROD_TBL))
   cat(sprintf("   * DCL_TBL: %s\n", DCL_TBL))
   cat(sprintf("   * BASIN_MAX_MTH_TBL: %s\n", BASIN_MAX_MTH_TBL))
