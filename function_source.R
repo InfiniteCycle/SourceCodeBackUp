@@ -79,7 +79,7 @@ Moving_Avg <- function(data, interval){
 
 ## @@ 6th Function
 ### The function will return a data.table containing basin DI.
-partition_load <-function(basin_name, part_num){
+partition_load <-function(basin_name, part_num, tbl_name = 'zsz.crd_prod_base'){
   ### basin_name: the basin that needed.
   ### part_num: how many parts need to be partitioned.
 
@@ -89,9 +89,9 @@ partition_load <-function(basin_name, part_num){
   library(data.table)
   ###
 
-  first_prod_year <- sprintf("select distinct(first_prod_year) from zsz.crd_prod_base
+  first_prod_year <- sprintf("select distinct(first_prod_year) from %s
                               where basin = '%s'
-                             order by first_prod_year", basin_name) %>>%
+                             order by first_prod_year", tbl_name, basin_name) %>>%
                              {dbGetQuery(dev_base, .)}
   n = nrow(first_prod_year)
   PARTNUM <- part_num
@@ -99,21 +99,21 @@ partition_load <-function(basin_name, part_num){
   thres <- first_prod_year[ind[2:PARTNUM],] # threshold for making partitions.
 
   # create an empty data table to hold all values.
-  result_table <- sprintf("select * from zsz.crd_prod_base limit 0") %>>%
+  result_table <- sprintf("select * from %s limit 0", tbl_name) %>>%
                           {dbGetQuery(dev_base, .)} %>>%
                           {as.data.table(.)}
 
   for(i in 1:(PARTNUM)){
     if(i == 1){
-      query <- sprintf("select * from zsz.crd_prod_base
-                        where basin = '%s' and first_prod_year < %s", basin_name, thres[i])
+      query <- sprintf("select * from %s
+                        where basin = '%s' and first_prod_year < %s", tbl_name, basin_name, thres[i])
     } else if(i == (PARTNUM)){
-      query <- sprintf("select * from zsz.crd_prod_base
-                       where basin = '%s' and first_prod_year >= %s", basin_name, thres[i - 1])
+      query <- sprintf("select * from %s
+                       where basin = '%s' and first_prod_year >= %s", tbl_name, basin_name, thres[i - 1])
     } else{
-      query <- sprintf("select * from zsz.crd_prod_base
+      query <- sprintf("select * from %s
                        where basin = '%s' and first_prod_year >= %s
-                       and first_prod_year < %s", basin_name,
+                       and first_prod_year < %s", tbl_name, basin_name,
                        thres[i - 1], thres[i])
     }
     ## using data.table and rbindlist for fast table binding.
@@ -165,9 +165,9 @@ filling_zero <- function(i, prod_tbl){
                               'comment' = "All Zeros")
       } else {
 
-        temp_liq_lag_2 = (1 + temp[n_mth == (max_n_mth - 3), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 2) - 1
-        temp_liq_lag_1 = (1 + temp_liq_lag_2) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1
-        temp_liq_lag_0 = (1 + temp_liq_lag_1) * find_dcl_factor(temp_basin, first, dcl_mth) - 1
+        temp_liq_lag_2 = round((1 + temp[n_mth == (max_n_mth - 3), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 2) - 1, 0)
+        temp_liq_lag_1 = round((1 + temp_liq_lag_2) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1, 0)
+        temp_liq_lag_0 = round((1 + temp_liq_lag_1) * find_dcl_factor(temp_basin, first, dcl_mth) - 1, 0)
 
         temp_dt <- data.table('entity_id' = rep(temp_entity_id,3),
                               'n_mth' = c((max_n_mth - 2), (max_n_mth - 1), max_n_mth),
@@ -176,8 +176,8 @@ filling_zero <- function(i, prod_tbl){
       }
     } else {
 
-      temp_liq_lag_1 = (1 + temp[n_mth == (max_n_mth - 2), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1
-      temp_liq_lag_0 = (1 + temp_liq_lag_1) * find_dcl_factor(temp_basin, first, dcl_mth) - 1
+      temp_liq_lag_1 = round((1 + temp[n_mth == (max_n_mth - 2), liq]) * find_dcl_factor(temp_basin, first, dcl_mth - 1) - 1, 0)
+      temp_liq_lag_0 = round((1 + temp_liq_lag_1) * find_dcl_factor(temp_basin, first, dcl_mth) - 1, 0)
       temp_dt <- data.table('entity_id' = rep(temp_entity_id,2),
                             'n_mth' = c((max_n_mth - 1), max_n_mth),
                             'liq' = pmax(c(temp_liq_lag_1, temp_liq_lag_0), 0),
@@ -226,7 +226,7 @@ update_table <- function(orig_tbl, update_val_tbl){
 ## This function retuens a data.table containing inserted missing values.
 ## By executing this function, filling missing values could be made parallelly.
 
-filling_missing <- function(i){
+filling_missing <- function(i, cutoff_date){
   temp <- missing[i,]
   temp_entity_id <- temp[, entity_id]
   temp_basin <- temp[, basin]
@@ -258,10 +258,10 @@ filling_missing <- function(i){
       {
 
         if(j == 1) {
-          temp_liq = (1 + temp[, liq]) *find_dcl_factor(temp[, basin], first, dcl_mth) - 1
+          temp_liq = round((1 + temp[, liq]) *find_dcl_factor(temp[, basin], first, dcl_mth) - 1,0)
           temp_liq_last = temp_liq
         } else {
-          temp_liq = (1 + temp_liq_last) * find_dcl_factor(temp[, basin], first, dcl_mth) - 1
+          temp_liq = round((1 + temp_liq_last) * find_dcl_factor(temp[, basin], first, dcl_mth) - 1,0)
           temp_liq_last = temp_liq
         }
 
@@ -278,6 +278,7 @@ filling_missing <- function(i){
         temp_hold_dt = rbindlist(list(temp_hold_dt, temp_dt))
       }
     }
+    temp_hold_dt[, last_prod_date := cutoff_date]
 
   } else {
     dcl_mth <- max_n_mth
@@ -292,10 +293,10 @@ filling_missing <- function(i){
       if(toDate(temp[, prod_date], j) <= cutoff_date)
       {
         if(j == 1) {
-          temp_liq = (1 + temp[,liq]) * find_dcl_factor(temp_basin, first, dcl_mth + j) - 1
+          temp_liq = round((1 + temp[,liq]) * find_dcl_factor(temp_basin, first, dcl_mth + j) - 1, 0)
           temp_liq_last = temp_liq
         } else {
-          temp_liq = (1 + temp_liq_last) * find_dcl_factor(temp_basin, first, dcl_mth + j) - 1
+          temp_liq = round((1 + temp_liq_last) * find_dcl_factor(temp_basin, first, dcl_mth + j) - 1, 0)
           temp_liq_last = temp_liq
         }
 
@@ -311,6 +312,20 @@ filling_missing <- function(i){
         temp_hold_dt = rbindlist(list(temp_hold_dt, temp_dt))
       }
     }
+    temp_hold_dt[, last_prod_date := cutoff_date]
   }
   return(temp_hold_dt)
+}
+
+## @10th Function. Output basin info of program.
+initializing <- function(BASIN_NAME, PROD_TBL, DCL_TBL, BASIN_MAX_MTH_TBL, numberOfWorkers){
+  cat('## -------------------------------------------------## \n')
+  cat(sprintf("  Crude Production for '%s' Initializing...\n\n", BASIN_NAME))
+  cat("   Please Checking Basic Info Listed:\n\n")
+  cat(sprintf("   * BASIN_NAME: %s\n", BASIN_NAME))
+  cat(sprintf("   * PROD_TBL: %s\n", PROD_TBL))
+  cat(sprintf("   * DCL_TBL: %s\n", DCL_TBL))
+  cat(sprintf("   * BASIN_MAX_MTH_TBL: %s\n", BASIN_MAX_MTH_TBL))
+  cat(sprintf("   * NUMBER_OF_WORKERS: %d\n\n", numberOfWorkers))
+  cat('## -------------------------------------------------## \n')
 }
