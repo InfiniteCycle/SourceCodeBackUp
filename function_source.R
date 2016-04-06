@@ -278,7 +278,7 @@ filling_missing <- function(i, cutoff_date){
         temp_hold_dt = rbindlist(list(temp_hold_dt, temp_dt))
       }
     }
-    temp_hold_dt[, last_prod_date := cutoff_date]
+    temp_hold_dt[, last_prod_date := as.character(cutoff_date)]
 
   } else {
     dcl_mth <- max_n_mth
@@ -312,7 +312,7 @@ filling_missing <- function(i, cutoff_date){
         temp_hold_dt = rbindlist(list(temp_hold_dt, temp_dt))
       }
     }
-    temp_hold_dt[, last_prod_date := cutoff_date]
+    temp_hold_dt[, last_prod_date := as.character(cutoff_date)]
   }
   return(temp_hold_dt)
 }
