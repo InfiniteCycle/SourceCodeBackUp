@@ -80,6 +80,7 @@ forward_liq_func_v2 <- function(j){
     dcl_mth <- max_n_mth + 1
   }
 
+  proj_liq = (1 + temp[,liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1
   # dcl_mth <- (max_n_mth + 1)
   temp_dt = temp
   # entity_id, basin, first_prod_year are the same.
@@ -87,7 +88,7 @@ forward_liq_func_v2 <- function(j){
   temp_dt[, n_mth := (n_mth + 1)]
   temp_dt[, prod_date := as.character(format(as.Date(prod_date)+32,'%Y-%m-01'))]
   temp_dt[, comment := "Inserted"]
-  temp_dt[, liq := (1 + temp[,liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1]
+  temp_dt[, liq := proj_liq]
   return(temp_dt)
 }
 
