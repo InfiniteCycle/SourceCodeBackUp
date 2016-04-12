@@ -56,6 +56,42 @@ forward_liq_func <- function(j){
   return(temp_dt$liq)
 }
 
+
+forward_liq_func_v2 <- function(j){
+  temp <- forward_dt[j, ]
+  temp_entity_id <- temp[,entity_id]
+  temp_basin <- temp[, basin]
+
+  if (temp[, first_prod_year] < 1980) {
+    first <- 1980 }
+  else {
+    first <- temp[, first_prod_year]
+  }
+
+  ## max month of production in basin where the entity is  and from the year that entity first start producing
+  basin_max_mth <- basin_max_mth_tbl[basin == temp_basin & first_prod_year == first, max]
+
+  ## Actual max month of production of the entity
+  max_n_mth <- temp[prod_date == last_prod_date[1], n_mth]
+
+  if (max_n_mth >= basin_max_mth) {
+    dcl_mth <- basin_max_mth + 1
+  } else {
+    dcl_mth <- max_n_mth + 1
+  }
+
+  # dcl_mth <- (max_n_mth + 1)
+  temp_dt = temp
+  # entity_id, basin, first_prod_year are the same.
+  temp_dt[, last_prod_date := as.character(format(as.Date(last_prod_date)+32,'%Y-%m-01'))]
+  temp_dt[, n_mth := (n_mth + 1)]
+  temp_dt[, prod_date := as.character(format(as.Date(prod_date)+32,'%Y-%m-01'))]
+  temp_dt[, comment := "Inserted"]
+  temp_dt[, liq := (1 + temp[,liq]) * find_dcl_factor(temp_basin, first, dcl_mth) - 1]
+  return(temp_dt)
+}
+
+
 ## @@ 5th Function
 ## calculate the moving average
 Moving_Avg <- function(data, interval){
