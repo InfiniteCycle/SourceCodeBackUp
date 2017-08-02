@@ -8,15 +8,6 @@ library(foreach)
 library(doParallel)
 library(data.table)
 
-# Set the driver of the PostgreSQL, the driver file (postgresql-9.4.1207.jar) must be downloaded first.
-pgsql <- JDBC("org.postgresql.Driver", "C:/Users/Xiao Wang/Desktop/Programs/postgresql-9.4.1207.jar", "`")
-
-# Establish the connection with Database Prod!
-base<-dbConnect(pgsql, "jdbc:postgresql://ec2-54-204-4-247.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory",
-                user="u9dhckqe2ga9v1",
-                password="pa49dck9aopgfrahuuggva497mh")
-
-# dev_base <- dbConnect(pgsql, "jdbc:postgresql://ec2-107-22-244-132.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory&",user="u2bkiiv8j7scg0",password="p2kn6vk7k2jaqn2haqikl7hpbk5")
 #################################################################################################
 
 ### Loading drilling info data set here.
