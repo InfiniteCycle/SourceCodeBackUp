@@ -5,15 +5,6 @@ library(plyr)
 library(kimisc)
 library(doParallel)
 
-
-
-pgsql <- JDBC("org.postgresql.Driver", "C:/postgresql-9.2-1003.jdbc4.jar", "`")
-
-base<-dbConnect(pgsql, "jdbc:postgresql://ec2-54-204-4-247.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory&",user="u9dhckqe2ga9v1",password="pa49dck9aopgfrahuuggva497mh")
-
-#dev_base <- dbConnect(pgsql, "jdbc:postgresql://ec2-107-20-245-110.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory&",user="ubp42sjidmq53r",password="p4h3atl4j4ekqc9vmgtcrrku8as")
-
-options("scipen"=100)
 #############################################################################################################################################################
 
 
