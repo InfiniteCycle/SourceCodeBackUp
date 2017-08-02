@@ -8,25 +8,6 @@ library(doParallel)
 library(data.table)
 library(pipeR)
 
-## Set the driver of the PostgreSQL, the driver file (postgresql-9.4.1207.jar) must be downloaded first.
-pgsql <- JDBC("org.postgresql.Driver", "C:/Users/Xiao Wang/Desktop/Programs/postgresql-9.4.1207.jar", "`")
-
-## Establish the connection with Database Prod!
-base<-dbConnect(pgsql, "jdbc:postgresql://ec2-54-204-4-247.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory",
-                user="u9dhckqe2ga9v1",
-                password="pa49dck9aopgfrahuuggva497mh")
-
-dev_base <- dbConnect(pgsql, "jdbc:postgresql://ec2-54-243-198-3.compute-1.amazonaws.com:5432/d43mg7o903brjv?ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory",
-                      user="u95mf00g8knim4",
-                      password="p4jm2l990uj4hl92dh9abf6qmkr")
-
-## Set working directory.
-setwd("C:/Users/Xiao Wang/Desktop/Programs/Projects/Prod_Revised/")
-
-## Load all the user-defined functions. 
-  # The source file should be put in the working directory.
-source("C:/Users/Xiao Wang/Desktop/Programs/Github/SourceCodeBackUp/function_source.R")
-
 #--------------------------------------------------------------------------------------------------#
 
 ## Loading drilling info data set here.
